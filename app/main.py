@@ -1,6 +1,6 @@
 import csv
 from io import StringIO
-from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI
+from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI, Request
 import asyncio
 from app.models.vehicle import Vehicle
 from app.storage.relational_storage import RelationalStorage
@@ -73,3 +73,26 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
 
 
 app.include_router(router)
+
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_webhook(request: Request):
+    form = await request.form()
+    user_msg = form.get("Body")
+    from_number = form.get("From")
+    
+    print(f"Mensaje de {from_number}: {user_msg}")
+    
+    return "OK"
+
+
+
+# Author information endpoint
+@app.get("/author")
+async def get_author():
+    return {
+        "name": "Leonardo HG",
+        "location": "Ciudad de México",
+        "role": "Backend Developer",
+        "project": "Tech Challenge - Kabot"
+    }

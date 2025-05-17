@@ -71,6 +71,16 @@ services:
       - '5601'
     environment:
       OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    depends_on:
+      - app
+    command: http --domain=trusting-shrew-blindly.ngrok-free.app app:8000
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+
     
 volumes:
   mongo_data:
