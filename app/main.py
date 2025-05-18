@@ -1,12 +1,17 @@
 import csv
 from io import StringIO
-from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI, Request, Response
 import asyncio
 from app.models.vehicle import Vehicle
 from app.storage.relational_storage import RelationalStorage
 from app.storage.search_engine_storage import SearchEngineStorage
 
 from app.utils.helpers import chunk_records, parse_bool, parse_float
+
+from app.llm.openai_client import OpenAIClient
+
+from app.utils.messaging import send_whatsapp_message
+
 
 app = FastAPI()
 
@@ -77,13 +82,21 @@ app.include_router(router)
 
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
+    llm = OpenAIClient()
     form = await request.form()
     user_msg = form.get("Body")
     from_number = form.get("From")
     
     print(f"Mensaje de {from_number}: {user_msg}")
     
-    return "OK"
+    response_text = llm.generate_response(user_msg)
+    
+    print(f"Respuesta generada: {response_text}")
+    
+    send_whatsapp_message(from_number, response_text)
+    
+    return Response(status_code=200)
+
 
 
 
