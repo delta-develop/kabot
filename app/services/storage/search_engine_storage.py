@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 from opensearchpy import OpenSearch
 from opensearchpy.exceptions import RequestError
-from app.storage.base import Storage
+from app.services.storage.base import Storage
 import time
 from opensearchpy import OpenSearch
 

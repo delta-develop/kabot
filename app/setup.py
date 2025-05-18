@@ -1,5 +1,5 @@
-from app.storage.relational_storage import RelationalStorage
-from app.storage.search_engine_storage import SearchEngineStorage
+from app.services.storage.relational_storage import RelationalStorage
+from app.services.storage.search_engine_storage import SearchEngineStorage
 
 import time
 from opensearchpy.exceptions import ConnectionError

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 from sqlmodel import Session, select, create_engine
-from app.storage.base import Storage
+from app.services.storage.base import Storage
 from app.models.vehicle import Vehicle
 from sqlalchemy.engine import Engine, create_engine
 
