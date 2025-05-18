@@ -1,6 +1,6 @@
 import os
 from typing import Dict
-from app.llm.base import LLMBase
+from app.services.llm.base import LLMBase
 from openai import OpenAI
 import dotenv
 
@@ -17,13 +17,12 @@ class OpenAIClient(LLMBase):
         self.client = OpenAI(api_key=self.api_key)
         self.temperature = float(os.getenv("OPENAI_TEMPERATURE"))
 
-    def generate_response(self, user_input: str, context: Dict = {}) -> str:
+    def generate_response(self, messages: list) -> str:
         """
-        Generates a text response based on the user input.
+        Generates a text response from a list of messages in OpenAI format.
 
         Args:
-            user_input (str): Incoming message from user.
-            context (Dict): Optional context.
+            messages (list): A list of message dicts with roles and contents.
 
         Returns:
             str: Generated response from the LLM.
@@ -31,9 +30,7 @@ class OpenAIClient(LLMBase):
         response = self.client.chat.completions.create(
             model=self.model,
             temperature=self.temperature,
-            messages=[
-                {"role": "user", "content": user_input}
-            ]
+            messages=messages
         )
         return response.choices[0].message.content.strip()
 

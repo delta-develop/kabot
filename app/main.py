@@ -3,14 +3,25 @@ from io import StringIO
 from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI, Request, Response
 import asyncio
 from app.models.vehicle import Vehicle
-from app.storage.relational_storage import RelationalStorage
-from app.storage.search_engine_storage import SearchEngineStorage
+from app.services.storage.relational_storage import RelationalStorage
+from app.services.storage.search_engine_storage import SearchEngineStorage
 
-from app.utils.helpers import chunk_records, parse_bool, parse_float
+from app.utils.helpers import parse_bool, parse_float
 
-from app.llm.openai_client import OpenAIClient
+from app.services.llm.openai_client import OpenAIClient
 
 from app.utils.messaging import send_whatsapp_message
+
+from app.services.memory.memory import RedisWorkingMemory
+
+from app.prompts.summary import generate_summary_prompt, CONTEXT_PROMPT
+
+import dotenv
+
+import os
+
+
+dotenv.load_dotenv()
 
 
 app = FastAPI()
@@ -83,20 +94,51 @@ app.include_router(router)
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
     llm = OpenAIClient()
+    memory = RedisWorkingMemory()
+
+    MAX_TURNS = os.getenv("MAX_TURNS",10)
+
     form = await request.form()
     user_msg = form.get("Body")
     from_number = form.get("From")
-    
-    print(f"Mensaje de {from_number}: {user_msg}")
-    
-    response_text = llm.generate_response(user_msg)
-    
-    print(f"Respuesta generada: {response_text}")
-    
-    send_whatsapp_message(from_number, response_text)
-    
-    return Response(status_code=200)
 
+    await memory.append_turn(from_number, role="user", content=user_msg)
+
+    history = await memory.get(from_number) or []
+    
+    # Si el historial supera el límite, resumirlo
+    if len(history) >= MAX_TURNS:        
+        summary_prompt = [{
+          "role":"system",
+          "content":generate_summary_prompt(history)  
+        }]
+            
+        summary = llm.generate_response(summary_prompt)
+        
+        # Reemplaza el historial con el resumen y el mensaje actual del usuario
+        await memory.set(from_number, [
+            {"role": "system", "content": summary},
+            {"role": "user", "content": user_msg}
+        ])
+        history = [
+            {"role": "system", "content": summary},
+            {"role": "user", "content": user_msg}
+        ]
+        
+
+    # Solo agregar el mensaje actual del usuario si no está ya incluido en el historial
+    if not any(m["content"] == user_msg and m["role"] == "user" for m in history):
+        history.append({"role": "user", "content": user_msg})
+
+    messages = [CONTEXT_PROMPT] + history
+    
+    response_text = llm.generate_response(messages)
+
+    await memory.append_turn(from_number, role="system", content=response_text)
+
+    # send_whatsapp_message(from_number, response_text)
+
+    return Response(status_code=200)
 
 
 
