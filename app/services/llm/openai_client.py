@@ -1,47 +1,60 @@
 import os
 from typing import Dict
 from app.services.llm.base import LLMBase
-from openai import OpenAI
 import dotenv
+from app.services.storage.connections import get_openai_client
+
 
 dotenv.load_dotenv()
 
+
 class OpenAIClient(LLMBase):
     """
-    OpenAI client for generating responses from user messages.
+    Asynchronous OpenAI client that implements the LLMBase interface
+    for generating responses and interpreting input.
     """
 
     def __init__(self):
         self.model = os.getenv("OPENAI_MODEL")
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.client = OpenAI(api_key=self.api_key)
-        self.temperature = float(os.getenv("OPENAI_TEMPERATURE"))
+        self.temperature = float(os.getenv("OPENAI_TEMPERATURE", 0.7))
+        self.client = None
+        
+    async def get_client(self):
+        if self.client is None:
+            self.client = await get_openai_client()
+        return self.client
 
-    def generate_response(self, messages: list) -> str:
+
+    async def generate_response(self, messages: list) -> str:
         """
-        Generates a text response from a list of messages in OpenAI format.
+        Asynchronously generates a text response from a list of messages
+        in OpenAI chat format.
 
         Args:
-            messages (list): A list of message dicts with roles and contents.
+            messages (list): List of dictionaries representing a chat history.
 
         Returns:
-            str: Generated response from the LLM.
+            str: Text response from the language model.
         """
-        response = self.client.chat.completions.create(
+        if not self.client:
+            self.client = await self.get_client()
+        response = await self.client.chat.completions.create(
             model=self.model,
             temperature=self.temperature,
-            messages=messages
+            messages=messages,
         )
+        # Extract content from the async response
         return response.choices[0].message.content.strip()
 
-    def interpret(self, user_input: str) -> Dict:
+    async def interpret(self, user_input: str) -> Dict:
         """
-        Placeholder method for future intent detection logic.
+        Interprets the user input and returns a default intent payload.
 
         Args:
-            user_input (str): Incoming message from user.
+            user_input (str): The input message from the user.
 
         Returns:
-            Dict: Default interpretation payload.
+            Dict: Default interpretation result with intent and message.
         """
+        # Simple pass-through interpretation, kept async for interface consistency
         return {"intent": "default", "message": user_input}

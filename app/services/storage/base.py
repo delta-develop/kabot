@@ -1,11 +1,12 @@
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
 
 class Storage(ABC):
     @abstractmethod
-    def save(self, data: Dict[str, Any]) -> None:
-        """Save a single item to the storage backend.
+    async def save(self, data: Dict[str, Any]) -> None:
+        """Asynchronously save a single item to the storage backend.
 
         Args:
             data (Dict[str, Any]): The data to store.
@@ -13,20 +14,13 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def query(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Query the storage using filter criteria.
-
-        Args:
-            filters (Dict[str, Any]): A dictionary of query filters.
-
-        Returns:
-            List[Dict[str, Any]]: A list of matching records.
-        """
+    async def get(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Asynchronously get records from the storage using filter criteria."""
         pass
 
     @abstractmethod
-    def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
-        """Load multiple records from the storage backend based on a key.
+    async def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
+        """Asynchronously load multiple records into the storage backend.
 
         Args:
             data (Dict): The data to be bulk uploaded.
@@ -37,6 +31,6 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def setup(self) -> None:
-        """Perform setup operations such as creating tables or indices."""
+    async def setup(self) -> None:
+        """Perform asynchronous setup operations such as creating tables or indices."""
         pass

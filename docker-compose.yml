@@ -11,6 +11,8 @@ services:
       - opensearch-node1
     env_file:
       - .env
+    volumes:
+      - .:/app
 
   mongo:
     image: mongo:5
