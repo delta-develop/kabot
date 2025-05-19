@@ -1,9 +1,19 @@
 async def build_fact_merge_prompt(recent_messages: list, previous_facts: dict) -> dict:
-    formatted_history = "\n".join(f"{m['role']}: {m['content']}" for m in recent_messages)
+    """
+    Construye un prompt para actualizar o fusionar hechos relevantes sobre el usuario basándose en su historial de conversación reciente.
+
+    Args:
+        recent_messages (list): Lista de mensajes recientes en formato {'role': ..., 'content': ...}.
+        previous_facts (dict): Diccionario con los hechos previamente almacenados del usuario.
+
+    Returns:
+        dict: Un diccionario con el rol 'system' y el contenido del prompt construido.
+    """
+    formatted_history = "\n".join(
+        f"{m['role']}: {m['content']}" for m in recent_messages
+    )
     formatted_facts = ", ".join(f"{k}: {v}" for k, v in previous_facts.items())
 
-    print(f"formatted history {formatted_history} and facts  {formatted_facts}")
-    
     return {
         "role": "system",
         "content": f"""
@@ -23,5 +33,5 @@ async def build_fact_merge_prompt(recent_messages: list, previous_facts: dict) -
             {formatted_history}
             </conversation>
 
-            Devuelve únicamente un objeto JSON con los hechos actualizados del usuario. No lo encierres en bloques de código ni lo formatees como Markdown. No incluyas explicaciones ni formato adicional.        """.strip()
-                }
+            Devuelve únicamente un objeto JSON con los hechos actualizados del usuario. No lo encierres en bloques de código ni lo formatees como Markdown. No incluyas explicaciones ni formato adicional.        """.strip(),
+    }

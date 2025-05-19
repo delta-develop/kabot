@@ -14,28 +14,11 @@ from fastapi import (
     UploadFile,
 )
 from typing import List
-# Standard library imports
-import asyncio
-import csv
-import os
 
-# Third-party imports
-import dotenv
-from fastapi import (
-    APIRouter,
-    FastAPI,
-    File,
-    HTTPException,
-    Request,
-    Response,
-    UploadFile,
-)
-
+# Local application/library specific imports
 import openai
 from app.utils.openai_utils import get_embedding
 from app.utils.description import build_vehicle_description
-
-# Local application/library specific imports
 from app.models.vehicle import Vehicle
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
 from app.services.storage.relational_storage import RelationalStorage
@@ -64,13 +47,13 @@ async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[d
     Returns:
         List[dict]: Matching vehicles with metadata.
     """
-    
-    
+
     try:
         results = await perform_vehicle_search(query, k)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search error: {e}")
+
 
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...)) -> dict:
@@ -117,7 +100,9 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
                     vehicle = Vehicle(**record)
                     description = build_vehicle_description(vehicle)
                     vector = await get_embedding(description)
-                    await search_engine_storage.index_with_embedding(description, record, vector)
+                    await search_engine_storage.index_with_embedding(
+                        description, record, vector
+                    )
                 total_processed += len(records)
                 records = []
 
@@ -127,7 +112,9 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
                 vehicle = Vehicle(**record)
                 description = build_vehicle_description(vehicle)
                 vector = await get_embedding(description)
-                await search_engine_storage.index_with_embedding(description, record, vector)
+                await search_engine_storage.index_with_embedding(
+                    description, record, vector
+                )
             total_processed += len(records)
 
     except Exception as e:
@@ -138,14 +125,24 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
 
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
+    """
+    Receives incoming messages from WhatsApp, processes them through the orchestrator, 
+    and sends a response using the Twilio messaging service.
+
+    Args:
+        request (Request): Incoming HTTP request from Twilio containing message data.
+
+    Returns:
+        Response: HTTP response with status 200 and response text.
+    """
     form = await request.form()
     user_msg = sanitize_message(form.get("Body"))
-    raw_from = form.get("From") 
+    raw_from = form.get("From")
     from_number = raw_from.split(":")[-1].replace("+", "")
 
     orchestrator = await CognitiveOrchestrator.from_defaults()
     response_text = await orchestrator.handle_incoming_message(from_number, user_msg)
-    
+
     send_whatsapp_message(raw_from, response_text)
 
     return Response(status_code=200, content=response_text)
@@ -153,6 +150,15 @@ async def whatsapp_webhook(request: Request):
 
 @app.post("/debug/migrate-memory")
 async def migrate_memory_endpoint(user_id: str):
+    """
+    Triggers the persistence of memory data to long-term storage for the given user ID.
+
+    Args:
+        user_id (str): The user's phone number identifier.
+
+    Returns:
+        dict: Result message or error.
+    """
     try:
         print(user_id)
         orchestrator = await CognitiveOrchestrator.from_defaults()
@@ -165,6 +171,12 @@ async def migrate_memory_endpoint(user_id: str):
 # Author information endpoint
 @app.get("/author")
 async def get_author():
+    """
+    Returns author metadata for the project.
+
+    Returns:
+        dict: Author information.
+    """
     return {
         "name": "Leonardo HG",
         "location": "Ciudad de México",
