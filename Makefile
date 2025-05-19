@@ -107,3 +107,7 @@ rebuild-app:
 	docker-compose up -d app
 
 start: build-up
+
+test:
+	PYTHONPATH=. coverage run -m pytest -vvv tests/
+	coverage report -m

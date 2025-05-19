@@ -26,7 +26,7 @@ class SummaryMemory(Memory):
             recent_messages=data, previous_summary=old_summary or ""
         )
         merged_summary = await self.llm.generate_response([prompt])
-        await self.storage.save({"whatsapp_id": key, "data": merged_summary})
+        await self.storage.save({"whatsapp_id": key, "data": merged_summary[0]})
 
     async def retrieve_from_memory(self, key: str) -> Any:
         """Retrieves the summarized memory for a given user key.
