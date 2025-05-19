@@ -1,20 +1,8 @@
-import os
-
 from openai import AsyncOpenAI
+from app.services.storage.connections import get_openai_client
+from typing import List
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
-async def get_embedding(text: str) -> list[float]:
-    """Obtiene el embedding vectorial de un texto utilizando el modelo 'text-embedding-3-small'.
-
-    Args:
-        text (str): El texto a procesar.
-
-    Returns:
-        list[float]: Lista de valores float que representan el embedding del texto.
-    """
-    response = await client.embeddings.create(
-        model="text-embedding-3-small", input=text
-    )
+async def get_embedding(text: str) -> List[float]:
+    client = await get_openai_client()
+    response = await client.embeddings.create(input=[text], model="text-embedding-3-small")
     return response.data[0].embedding
