@@ -1,6 +1,12 @@
 from typing import List, Dict, Any
 import json
 from app.prompts.conversation import build_intention_prompt_messages, build_intention_prompt_instruction
+from app.services.search.search_handler import perform_vehicle_search
+from app.prompts.finance import FINANCE_PROMPT
+from app.prompts.kavak import KAVAK_INFO_PROMPT
+from app.prompts.summary import summarize_vehicle_results
+from app.prompts.exit import EXIT_PROMPT
+
 
 
 class CognitiveOrchestrator:
@@ -55,15 +61,10 @@ class CognitiveOrchestrator:
 
         # Incluir memoria de trabajo reciente como parte del contexto
         working_context = await self.working_memory.retrieve_from_memory(user_id) or []
-        history_text = ""
-        for msg in working_context:
-            role = msg["role"]
-            content = msg["content"]
-            history_text += f"<{role}>{content}</{role}>\n"
+        history_text = self._format_history(working_context)
 
         # 3. Preparar prompt de intención (con rol system + contexto + user_input)
-        facts = await self.fact_memory.retrieve_from_memory(user_id) or ""
-        summary = await self.summary_memory.retrieve_from_memory(user_id) or ""
+        facts, summary = await self._load_fact_and_summary_context(user_id)
 
         prompt_messages = build_intention_prompt_messages(facts, summary, history_text.strip(), user_msg)
 
@@ -75,51 +76,50 @@ class CognitiveOrchestrator:
             parsed = json.loads(llm_raw)
             intention = parsed.get("intention", "none")
             llm_reply = parsed.get("response", "")
+
         except Exception:
             intention = "none"
             llm_reply = llm_raw
 
+        print(f"intention: {intention}")
         # 6. Si requiere historial, expandir contexto y volver a llamar al LLM
         if intention == "episodic_memory":
-            history = await self.expand_context_from_long_term(user_id)
+            llm_reply = await self._handle_episodic_memory_intention(user_id, user_msg)
 
-            history_text = ""
-            for msg in history:
-                role = msg["role"]
-                content = msg["content"]
-                history_text += f"<{role}>{content}</{role}>\n"
+        elif intention == "search":
+            llm_reply = await self._handle_search_intention(user_id, user_msg)
 
-            context_with_history = [
-                {
-                    "role": "system",
-                    "content": f"""
-                        <context>
-                            <fact_memory>{facts}</fact_memory>
-                            <summary_memory>{summary}</summary_memory>
-                            <history>
-                            {history_text.strip()}
-                            </history>
-                        </context>
-                        """.strip()
-                }
-            ]
 
-            extended_messages = [
-                build_intention_prompt_instruction(),
-                *context_with_history,
-                {"role": "user", "content": f"<user_input>{user_msg}</user_input>"}
-            ]
+        elif intention == "financing":
+            llm_reply = await self._handle_financing_intention(user_id, user_msg, parsed)
 
-            llm_reply = await self.llm.generate_response(extended_messages)
+        elif intention == "kavak_info":
+            llm_reply = await self._handle_kavak_info_intention(user_id, user_msg)
+            
+        elif intention == "exit":
+            llm_reply = await self._handle_exit_intention(user_id, user_msg)
 
         # 7. Guardar en memoria de trabajo solo si la intención es "none"
-        if intention == "none":
-            await self.working_memory.store_in_memory(user_id, [
-                {"role": "user", "content": user_msg},
-                {"role": "assistant", "content": llm_reply}
-            ])
+        else:
+            await self._store_dialogue(user_id, user_msg, llm_reply)
 
         return llm_reply
+
+    async def _load_fact_and_summary_context(self, user_id: str) -> tuple[str, str]:
+        facts = await self.fact_memory.retrieve_from_memory(user_id) or ""
+        summary = await self.summary_memory.retrieve_from_memory(user_id) or ""
+        return facts, summary
+
+    def _format_history(self, messages: List[Dict[str, str]]) -> str:
+        """
+        Formatea una lista de mensajes como bloques XML para el prompt.
+        """
+        history_text = ""
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            history_text += f"<{role}>{content}</{role}>\n"
+        return history_text.strip()
 
     async def expand_context_from_long_term(self, user_id: str) -> List[Dict[str, str]]:
         """
@@ -180,3 +180,68 @@ class CognitiveOrchestrator:
         orchestrator.summary_memory = SummaryMemory(orchestrator.llm)
         
         return orchestrator
+
+    async def _store_dialogue(self, user_id: str, user_msg: str, assistant_msg: str):
+        await self.working_memory.store_in_memory(user_id, [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": assistant_msg}
+        ])
+        
+    async def _handle_episodic_memory_intention(self, user_id: str, user_msg: str) -> str:
+        history = await self.expand_context_from_long_term(user_id)
+        history_text = self._format_history(history)
+        facts, summary = await self._load_fact_and_summary_context(user_id)
+        context_with_history = [
+            {
+                "role": "system",
+                "content": f"""
+                    <context>
+                        <fact_memory>{facts}</fact_memory>
+                        <summary_memory>{summary}</summary_memory>
+                        <history>
+                        {history_text.strip()}
+                        </history>
+                    </context>
+                """.strip()
+            }
+        ]
+        extended_messages = [
+            build_intention_prompt_instruction(),
+            *context_with_history,
+            {"role": "user", "content": f"<user_input>{user_msg}</user_input>"}
+        ]
+        return await self.llm.generate_response(extended_messages)
+
+    async def _handle_search_intention(self, user_id: str, user_msg: str) -> str:
+        results = await perform_vehicle_search(user_msg, k=5)
+        summary_prompt = await summarize_vehicle_results(results)
+        llm_reply = await self.llm.generate_response([{"role": "user", "content": summary_prompt}])
+        await self.working_memory.store_in_memory(user_id, [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": f"<natural_language_summary>{llm_reply}</natural_language_summary>"},
+            {"role": "assistant", "content": f"<vehicle_results>{json.dumps(results)}</vehicle_results>"}
+        ])
+        return llm_reply
+
+    async def _handle_financing_intention(self, user_id: str, user_msg: str, parsed: dict) -> str:
+        vehicle_data = parsed.get("vehicle_data", {})
+        financing_prompt = FINANCE_PROMPT.format(user_input=user_msg, vehicle_data=vehicle_data)
+        llm_reply = await self.llm.generate_response([{"role": "user", "content": financing_prompt}])
+        await self._store_dialogue(user_id, user_msg, llm_reply)
+        return llm_reply
+
+    async def _handle_kavak_info_intention(self, user_id: str, user_msg: str) -> str:
+        kavak_prompt = KAVAK_INFO_PROMPT.format(user_input=user_msg)
+        llm_reply = await self.llm.generate_response([{"role": "user", "content": kavak_prompt}])
+        await self._store_dialogue(user_id, user_msg, llm_reply)
+        return llm_reply
+
+    async def _handle_exit_intention(self, user_id: str, user_msg: str) -> str:
+        history = await self.working_memory.retrieve_from_memory(user_id) or []
+        history_text = self._format_history(history)
+        facts, summary = await self._load_fact_and_summary_context(user_id)
+        prompt = EXIT_PROMPT.format(user_input=user_msg, working_memory=history_text.strip(), facts=facts, summary=summary)
+        llm_reply = await self.llm.generate_response([{"role": "user", "content": prompt}])
+        await self._store_dialogue(user_id, user_msg, llm_reply)
+        await self.persist_conversation_closure(user_id)
+        return llm_reply

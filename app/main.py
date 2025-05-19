@@ -1,8 +1,5 @@
 # Standard library imports
-import asyncio
 import csv
-import os
-import json
 
 # Third-party imports
 import dotenv
@@ -41,15 +38,12 @@ from app.utils.description import build_vehicle_description
 # Local application/library specific imports
 from app.models.vehicle import Vehicle
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
-from app.services.storage.cache_storage import CacheStorage
 from app.services.storage.relational_storage import RelationalStorage
 from app.services.storage.search_engine_storage import SearchEngineStorage
-from app.prompts.filters import FILTER_EXTRACTION_PROMPT
-from app.services.llm.openai_client import OpenAIClient
 from app.utils.helpers import parse_bool, parse_float
 from app.utils.messaging import send_whatsapp_message
 from app.utils.sanitization import sanitize_message
-
+from app.services.search.search_handler import perform_vehicle_search
 
 dotenv.load_dotenv()
 app = FastAPI()
@@ -73,25 +67,7 @@ async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[d
     
     
     try:
-        print("Entrando al try")
-        search_engine_storage = SearchEngineStorage()
-        print("Se declaró search_engine_storage")
-        # Paso 1: Obtener filtros desde el LLM
-        print(f"query {query}")
-        prompt = FILTER_EXTRACTION_PROMPT.format(query=query)
-        print(f"prompt {prompt}")
-        openai_client = OpenAIClient()
-        messages = [{"role": "user", "content": prompt}]
-        response = await openai_client.generate_response(messages)
-        filters = json.loads(response)
-        
-        print(f"filters {filters}")
-
-        # Paso 2: Obtener vector del query
-        vector = await get_embedding(query)
-
-        # Paso 3: Realizar búsqueda con filtros
-        results = await search_engine_storage.knn_search(vector, k=k, filters=filters)
+        results = await perform_vehicle_search(query, k)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search error: {e}")
@@ -169,6 +145,8 @@ async def whatsapp_webhook(request: Request):
 
     orchestrator = await CognitiveOrchestrator.from_defaults()
     response_text = await orchestrator.handle_incoming_message(from_number, user_msg)
+    
+    send_whatsapp_message(raw_from, response_text)
 
     return Response(status_code=200, content=response_text)
 

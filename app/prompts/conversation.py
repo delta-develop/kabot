@@ -2,32 +2,50 @@ def build_intention_prompt_instruction() -> dict:
     return {
         "role": "system",
         "content": """
-            Actúas como un asistente conversacional inteligente.
+Actúas como un asistente conversacional inteligente.
 
-            Se te proporciona un contexto de memoria en formato XML:
-            <context>
-                <fact_memory> ... </fact_memory>
-                <summary_memory> ... </summary_memory>
-            </context>
+Se te proporciona un contexto de memoria en formato XML:
+<context>
+    <fact_memory> ... </fact_memory>
+    <summary_memory> ... </summary_memory>
+    <working_memory> ... </working_memory>
+</context>
 
-            A continuación recibirás un mensaje del usuario, marcado como <user_input>...</user_input>.
+Recibirás el mensaje del usuario como: <user_input> ... </user_input>
 
-            Tu tarea es:
-            1. Analizar si el mensaje del usuario puede ser respondido únicamente con el contexto provisto.
-            2. Antes de considerar acceder al historial completo (memoria episódica), intenta responder usando solamente el contexto provisto y la memoria de trabajo (últimos mensajes de la conversación actual que todavía están disponibles).
-            3. Solo si el usuario hace referencia explícita o implícita a recuerdos pasados —por ejemplo, preguntando algo que ya te haya dicho antes, mencionando “recuerdas”, “qué te dije”, o usando pronombres sin antecedente claro—, responde con:
-            {"intention": "episodic_memory"}
-            En cualquier otro caso, no recurras a la memoria episódica.
-            4. Si el contexto actual y la memoria de trabajo son suficientes, responde con:
-            {"intention": "none", "response": "<respuesta>"}
+Tu tarea es identificar la intención detrás del mensaje del usuario. Evalúa cada uno de los siguientes casos de forma independiente y excluyente. Devuelve solo una de estas intenciones en formato JSON.
 
-            No incluyas encabezados, explicaciones ni ningún otro contenido.
-            """.strip()
+- Si el usuario se despide o expresa que la conversación ha terminado (ej. "gracias", "nos vemos", "hasta luego"), responde con:
+  {"intention": "exit"}
+
+- Si el usuario pregunta por Kavak, su funcionamiento, servicios, sedes o información general de la empresa, responde con:
+  {"intention": "kavak_info"}
+
+- Si el mensaje parece ser una consulta para buscar vehículos, responde con:
+  {"intention": "search"}
+
+- Si el mensaje se refiere a opciones de financiamiento, mensualidades o formas de pagar un vehículo a crédito:
+    - Si puedes identificar el vehículo (por el mensaje o la memoria de trabajo), incluye los datos en XML:
+      {"intention": "financing", "vehicle": "<vehiculo>...</vehiculo>"}
+    - Si no puedes identificar el vehículo con certeza, responde solo con la intención:
+      {"intention": "financing"}
+
+- Si el mensaje requiere información previamente mencionada y no está presente en la memoria de trabajo, responde con:
+  {"intention": "episodic_memory"}
+
+- En cualquier otro caso, responde normalmente con:
+  {"intention": "none", "response": "<respuesta>"}
+  
+- Si ya tienes información de contexto y recibes algún mensaje que pueda considerarse un saludo (ej "Hola", "hey", "hola de nuevo"), tu respuesta deberá incluir algo del contexto para enriqeucerla.
+
+Asegúrate de analizar tanto el contexto como el contenido de <user_input>. No incluyas encabezados, explicaciones ni ningún otro contenido.
+""".strip()
     }
 
 
 def build_intention_prompt_messages(fact_memory: str, summary_memory: str, working_memory_text: str, user_msg: str) -> list[dict]:
     return [
+        build_intention_prompt_instruction(),
         {
             "role": "system",
             "content": f"""
@@ -40,6 +58,6 @@ def build_intention_prompt_messages(fact_memory: str, summary_memory: str, worki
         },
         {
             "role": "user",
-            "content": user_msg
+            "content": f"<user_input>{user_msg}</user_input>"
         }
     ]
