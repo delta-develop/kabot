@@ -65,7 +65,8 @@ Skipping this step will cause the application to fail when trying to interact wi
 
 ---
 
-Built with 💻 and lots of coffee ☕️ by Leonardo.
+Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
+(Si lo leí, si le di permiso de que lo pusiera ahí, sería irónico crear un sistema para trabajar con LLMs sin usar un LLM ¿no creen? atentamente y con mucho respeto, Leo)
 
 
 ## Conversation Memory Use Cases

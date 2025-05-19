@@ -7,7 +7,13 @@ from app.services.storage.connections import get_open_search_client
 INDEX_NAME = "vehicles"
 
 MAPPING = {
-    "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+    "settings": {
+        "index": {
+            "knn": True,
+            "number_of_shards": 1,
+            "number_of_replicas": 0
+        }
+    },
     "mappings": {
         "properties": {
             "stock_id": {"type": "integer"},
@@ -22,8 +28,19 @@ MAPPING = {
             "ancho": {"type": "float"},
             "altura": {"type": "float"},
             "car_play": {"type": "boolean"},
+            "embedding": {
+                "type": "knn_vector",
+                "dimension": 1536,
+                "method": {
+                    "name": "hnsw",
+                    "engine": "faiss",
+                    "space_type": "cosinesimil"
+                }
+            },
+            "text": {"type": "text"},
+            "metadata": {"type": "object", "enabled": True}
         }
-    },
+    }
 }
 
 
@@ -70,5 +87,54 @@ class SearchEngineStorage(Storage):
             actions.append({"_index": INDEX_NAME, "_source": doc})
         await async_bulk(client, actions)
         return records
+    
+    async def index_with_embedding(self, text: str, metadata: dict, vector: list[float]) -> None:
+        client = await get_open_search_client()
+        body = {
+            "text": text,
+            "embedding": vector,
+            "metadata": metadata
+        }
+        await client.index(index=INDEX_NAME, body=body)
 
 
+    async def knn_search(self, vector: list[float], k: int = 5, filters: dict = None) -> List[Dict[str, Any]]:
+        client = await get_open_search_client()
+        knn_clause = {
+            "knn": {
+                "embedding": {
+                    "vector": vector,
+                    "k": k
+                }
+            }
+        }
+
+        # The filters argument is expected to be a bool block (already formatted)
+        query = {
+            "size": k,
+            "_source": {
+                "excludes": ["embedding"]
+            },
+            "query": {
+                "bool": {
+                    **(filters if isinstance(filters, dict) else {}),
+                    "must": [knn_clause]
+                }
+            }
+        }
+
+        print(f"query: {query}")
+        response = await client.search(index=INDEX_NAME, body=query)
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+# Helper function to convert filters dict to OpenSearch clauses
+def filters_to_opensearch_clauses(filters: dict) -> list:
+    clauses = []
+    for key, value in filters.items():
+        # Los campos están dentro de "metadata", excepto "embedding" y "text"
+        field = f"metadata.{key}" if key not in {"embedding", "text"} else key
+        if isinstance(value, dict) and any(k in value for k in ["lte", "gte", "lt", "gt"]):
+            clauses.append({"range": {field: value}})
+        else:
+            clauses.append({"term": {field: value}})
+    return clauses
