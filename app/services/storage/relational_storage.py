@@ -67,6 +67,7 @@ class RelationalStorage(Storage):
         records = data.get("records", [])
         async with self.session_local() as session:
             async with session.begin():
-                vehicles = [Vehicle(**item) for item in records]
-                session.add_all(vehicles)
-        return [vehicle.model_dump() for vehicle in vehicles]
+                for item in records:
+                    vehicle = Vehicle(**item)
+                    await session.merge(vehicle)
+        return records

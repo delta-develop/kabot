@@ -2,6 +2,25 @@
 import asyncio
 import csv
 import os
+import json
+
+# Third-party imports
+import dotenv
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
+from typing import List
+# Standard library imports
+import asyncio
+import csv
+import os
 
 # Third-party imports
 import dotenv
@@ -15,12 +34,18 @@ from fastapi import (
     UploadFile,
 )
 
+import openai
+from app.utils.openai_utils import get_embedding
+from app.utils.description import build_vehicle_description
+
 # Local application/library specific imports
 from app.models.vehicle import Vehicle
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
 from app.services.storage.cache_storage import CacheStorage
 from app.services.storage.relational_storage import RelationalStorage
 from app.services.storage.search_engine_storage import SearchEngineStorage
+from app.prompts.filters import FILTER_EXTRACTION_PROMPT
+from app.services.llm.openai_client import OpenAIClient
 from app.utils.helpers import parse_bool, parse_float
 from app.utils.messaging import send_whatsapp_message
 from app.utils.sanitization import sanitize_message
@@ -29,9 +54,49 @@ from app.utils.sanitization import sanitize_message
 dotenv.load_dotenv()
 app = FastAPI()
 router = APIRouter()
+app.include_router(router)
 
 
-@router.post("/upload")
+@app.get("/search")
+async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[dict]:
+    """
+    Performs a semantic search over the vehicle index using the user's query.
+    Extracts structured filters using a language model before searching.
+
+    Args:
+        query (str): User's search input.
+        k (int): Number of similar results to return.
+
+    Returns:
+        List[dict]: Matching vehicles with metadata.
+    """
+    
+    
+    try:
+        print("Entrando al try")
+        search_engine_storage = SearchEngineStorage()
+        print("Se declaró search_engine_storage")
+        # Paso 1: Obtener filtros desde el LLM
+        print(f"query {query}")
+        prompt = FILTER_EXTRACTION_PROMPT.format(query=query)
+        print(f"prompt {prompt}")
+        openai_client = OpenAIClient()
+        messages = [{"role": "user", "content": prompt}]
+        response = await openai_client.generate_response(messages)
+        filters = json.loads(response)
+        
+        print(f"filters {filters}")
+
+        # Paso 2: Obtener vector del query
+        vector = await get_embedding(query)
+
+        # Paso 3: Realizar búsqueda con filtros
+        results = await search_engine_storage.knn_search(vector, k=k, filters=filters)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search error: {e}")
+
+@app.post("/upload")
 async def upload_csv(file: UploadFile = File(...)) -> dict:
     """
     Uploads a CSV file and ingests the data into PostgreSQL and OpenSearch in chunks.
@@ -70,28 +135,29 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
             except (ValueError, KeyError) as e:
                 raise HTTPException(status_code=400, detail=f"Invalid data format: {e}")
 
-            if len(records) == 100:
-                await asyncio.gather(
-                    relational_storage.bulk_load({"records": records}),
-                    search_engine_storage.bulk_load({"records": records}),
-                )
+            if len(records) == 10:
+                await relational_storage.bulk_load({"records": records})
+                for record in records:
+                    vehicle = Vehicle(**record)
+                    description = build_vehicle_description(vehicle)
+                    vector = await get_embedding(description)
+                    await search_engine_storage.index_with_embedding(description, record, vector)
                 total_processed += len(records)
                 records = []
 
         if records:
-            await asyncio.gather(
-                relational_storage.bulk_load({"records": records}),
-                search_engine_storage.bulk_load({"records": records}),
-            )
+            await relational_storage.bulk_load({"records": records})
+            for record in records:
+                vehicle = Vehicle(**record)
+                description = build_vehicle_description(vehicle)
+                vector = await get_embedding(description)
+                await search_engine_storage.index_with_embedding(description, record, vector)
             total_processed += len(records)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing CSV file: {e}")
 
     return {"message": "Upload successful", "records_processed": total_processed}
-
-
-app.include_router(router)
 
 
 @app.post("/webhook/whatsapp")
