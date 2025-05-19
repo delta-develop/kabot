@@ -8,11 +8,7 @@ INDEX_NAME = "vehicles"
 
 MAPPING = {
     "settings": {
-        "index": {
-            "knn": True,
-            "number_of_shards": 1,
-            "number_of_replicas": 0
-        }
+        "index": {"knn": True, "number_of_shards": 1, "number_of_replicas": 0}
     },
     "mappings": {
         "properties": {
@@ -34,13 +30,13 @@ MAPPING = {
                 "method": {
                     "name": "hnsw",
                     "engine": "faiss",
-                    "space_type": "cosinesimil"
-                }
+                    "space_type": "cosinesimil",
+                },
             },
             "text": {"type": "text"},
-            "metadata": {"type": "object", "enabled": True}
+            "metadata": {"type": "object", "enabled": True},
         }
-    }
+    },
 }
 
 
@@ -80,60 +76,83 @@ class SearchEngineStorage(Storage):
         records = data.get("records", [])
         actions = []
         for record in records:
-            if hasattr(record, "model_dump") and callable(getattr(record, "model_dump")):
+            if hasattr(record, "model_dump") and callable(
+                getattr(record, "model_dump")
+            ):
                 doc = record.model_dump()
             else:
                 doc = record
             actions.append({"_index": INDEX_NAME, "_source": doc})
         await async_bulk(client, actions)
         return records
-    
-    async def index_with_embedding(self, text: str, metadata: dict, vector: list[float]) -> None:
+
+    async def index_with_embedding(
+        self, text: str, metadata: dict, vector: list[float]
+    ) -> None:
+        """
+        Indexes a document with a vector embedding into OpenSearch.
+
+        Args:
+            text (str): Textual content of the document.
+            metadata (dict): Metadata associated with the document.
+            vector (list[float]): Embedding vector to be indexed.
+        """
         client = await get_open_search_client()
-        body = {
-            "text": text,
-            "embedding": vector,
-            "metadata": metadata
-        }
+        body = {"text": text, "embedding": vector, "metadata": metadata}
         await client.index(index=INDEX_NAME, body=body)
 
+    async def knn_search(
+        self, vector: list[float], k: int = 5, filters: dict = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Performs a k-Nearest Neighbors (k-NN) search on OpenSearch.
 
-    async def knn_search(self, vector: list[float], k: int = 5, filters: dict = None) -> List[Dict[str, Any]]:
+        Args:
+            vector (list[float]): Query embedding vector.
+            k (int, optional): Number of nearest neighbors to retrieve. Defaults to 5.
+            filters (dict, optional): Additional OpenSearch boolean filter clauses.
+
+        Returns:
+            List[Dict[str, Any]]: List of documents matching the vector and filters.
+        """
         client = await get_open_search_client()
-        knn_clause = {
-            "knn": {
-                "embedding": {
-                    "vector": vector,
-                    "k": k
-                }
-            }
-        }
+        knn_clause = {"knn": {"embedding": {"vector": vector, "k": k}}}
 
         # The filters argument is expected to be a bool block (already formatted)
         query = {
             "size": k,
-            "_source": {
-                "excludes": ["embedding"]
-            },
+            "_source": {"excludes": ["embedding"]},
             "query": {
                 "bool": {
                     **(filters if isinstance(filters, dict) else {}),
-                    "must": [knn_clause]
+                    "must": [knn_clause],
                 }
-            }
+            },
         }
 
         print(f"query: {query}")
         response = await client.search(index=INDEX_NAME, body=query)
         return [hit["_source"] for hit in response["hits"]["hits"]]
 
+
 # Helper function to convert filters dict to OpenSearch clauses
 def filters_to_opensearch_clauses(filters: dict) -> list:
+    """
+    Converts a dictionary of filters into OpenSearch query clauses.
+
+    Args:
+        filters (dict): Dictionary containing filter keys and values.
+
+    Returns:
+        list: A list of OpenSearch-compatible query clauses.
+    """
     clauses = []
     for key, value in filters.items():
         # Los campos están dentro de "metadata", excepto "embedding" y "text"
         field = f"metadata.{key}" if key not in {"embedding", "text"} else key
-        if isinstance(value, dict) and any(k in value for k in ["lte", "gte", "lt", "gt"]):
+        if isinstance(value, dict) and any(
+            k in value for k in ["lte", "gte", "lt", "gt"]
+        ):
             clauses.append({"range": {field: value}})
         else:
             clauses.append({"term": {field: value}})

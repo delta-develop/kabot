@@ -1,13 +1,25 @@
-import json
+async def build_summary_merge_prompt(
+    recent_messages: list, previous_summary: str
+) -> dict:
+    """
+    Construye un prompt para que el LLM genere o fusione un resumen conversacional.
 
-async def build_summary_merge_prompt(recent_messages: list, previous_summary: str) -> dict:
+    Args:
+        recent_messages (list): Lista de mensajes recientes de la conversación.
+        previous_summary (str): Resumen anterior almacenado.
+
+    Returns:
+        dict: Objeto con rol y contenido para el LLM.
+    """
     if not recent_messages and not previous_summary:
         return {
             "role": "system",
-            "content": "No hay historial ni resumen previo disponible. No es posible generar un resumen en este momento."
+            "content": "No hay historial ni resumen previo disponible. No es posible generar un resumen en este momento.",
         }
 
-    formatted_history = "\n".join(f"{m['role']}: {m['content']}" for m in recent_messages)
+    formatted_history = "\n".join(
+        f"{m['role']}: {m['content']}" for m in recent_messages
+    )
 
     if not previous_summary:
         return {
@@ -23,8 +35,8 @@ async def build_summary_merge_prompt(recent_messages: list, previous_summary: st
                 </conversation>
 
                 Devuelve únicamente el resumen generado. No incluyas encabezados ni explicaciones.
-                """.strip()
-                }
+                """.strip(),
+        }
 
     return {
         "role": "system",
@@ -44,11 +56,20 @@ async def build_summary_merge_prompt(recent_messages: list, previous_summary: st
             </conversation>
 
             Devuelve únicamente el nuevo resumen combinado. No incluyas encabezados ni explicaciones.
-            """.strip()
-                }
-    
-    
+            """.strip(),
+    }
+
+
 async def generate_summary_prompt(history: list) -> dict:
+    """
+    Genera un prompt para resumir una conversación completa.
+
+    Args:
+        history (list): Historial completo de mensajes.
+
+    Returns:
+        dict: Prompt estructurado para el LLM.
+    """
     formatted_history = "\n".join(f"{m['role']}: {m['content']}" for m in history)
 
     return {
@@ -94,13 +115,21 @@ CONTEXT_PROMPT = {
 
 
 async def summarize_vehicle_results(results: list) -> str:
-        """
-        Uses the LLM to summarize a list of vehicle search results into a user-friendly message.
-        """
-        formatted_results = json.dumps(results, indent=2, ensure_ascii=False)
-        prompt = VEHICLE_SUMMARIZATION_PROMPT.format(results=formatted_results)
-        return prompt
-    
+    """
+    Genera un resumen natural y amigable de una lista de vehículos encontrados.
+
+    Args:
+        results (list): Lista de resultados de búsqueda de autos.
+
+    Returns:
+        str: Prompt formateado con los resultados listos para el LLM.
+    """
+    import json
+    formatted_results = json.dumps(results, indent=2, ensure_ascii=False)
+    prompt = VEHICLE_SUMMARIZATION_PROMPT.format(results=formatted_results)
+    return prompt
+
+
 VEHICLE_SUMMARIZATION_PROMPT = """
     A continuación tienes una lista de vehículos que coinciden con los intereses del usuario.
 
