@@ -1,32 +1,35 @@
-import csv
-from io import StringIO
-from fastapi import APIRouter, UploadFile, File, HTTPException, FastAPI, Request, Response
+# Standard library imports
 import asyncio
+import csv
+import os
+
+# Third-party imports
+import dotenv
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
+
+# Local application/library specific imports
 from app.models.vehicle import Vehicle
+from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
+from app.services.storage.cache_storage import CacheStorage
 from app.services.storage.relational_storage import RelationalStorage
 from app.services.storage.search_engine_storage import SearchEngineStorage
-
 from app.utils.helpers import parse_bool, parse_float
-
-from app.services.llm.openai_client import OpenAIClient
-
 from app.utils.messaging import send_whatsapp_message
-
-from app.services.memory.memory import RedisWorkingMemory
-
-from app.prompts.summary import generate_summary_prompt, CONTEXT_PROMPT
-
-import dotenv
-
-import os
+from app.utils.sanitization import sanitize_message
 
 
 dotenv.load_dotenv()
-
-
 app = FastAPI()
-
 router = APIRouter()
+
 
 @router.post("/upload")
 async def upload_csv(file: UploadFile = File(...)) -> dict:
@@ -69,16 +72,16 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
 
             if len(records) == 100:
                 await asyncio.gather(
-                    asyncio.to_thread(relational_storage.bulk_load, {"records": records}),
-                    asyncio.to_thread(search_engine_storage.bulk_load, {"records": records}),
+                    relational_storage.bulk_load({"records": records}),
+                    search_engine_storage.bulk_load({"records": records}),
                 )
                 total_processed += len(records)
                 records = []
 
         if records:
             await asyncio.gather(
-                asyncio.to_thread(relational_storage.bulk_load, {"records": records}),
-                asyncio.to_thread(search_engine_storage.bulk_load, {"records": records}),
+                relational_storage.bulk_load({"records": records}),
+                search_engine_storage.bulk_load({"records": records}),
             )
             total_processed += len(records)
 
@@ -93,53 +96,26 @@ app.include_router(router)
 
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
-    llm = OpenAIClient()
-    memory = RedisWorkingMemory()
-
-    MAX_TURNS = os.getenv("MAX_TURNS",10)
-
     form = await request.form()
-    user_msg = form.get("Body")
-    from_number = form.get("From")
+    user_msg = sanitize_message(form.get("Body"))
+    raw_from = form.get("From") 
+    from_number = raw_from.split(":")[-1].replace("+", "")
 
-    await memory.append_turn(from_number, role="user", content=user_msg)
+    orchestrator = await CognitiveOrchestrator.from_defaults()
+    response_text = await orchestrator.handle_incoming_message(from_number, user_msg)
 
-    history = await memory.get(from_number) or []
-    
-    # Si el historial supera el límite, resumirlo
-    if len(history) >= MAX_TURNS:        
-        summary_prompt = [{
-          "role":"system",
-          "content":generate_summary_prompt(history)  
-        }]
-            
-        summary = llm.generate_response(summary_prompt)
-        
-        # Reemplaza el historial con el resumen y el mensaje actual del usuario
-        await memory.set(from_number, [
-            {"role": "system", "content": summary},
-            {"role": "user", "content": user_msg}
-        ])
-        history = [
-            {"role": "system", "content": summary},
-            {"role": "user", "content": user_msg}
-        ]
-        
+    return Response(status_code=200, content=response_text)
 
-    # Solo agregar el mensaje actual del usuario si no está ya incluido en el historial
-    if not any(m["content"] == user_msg and m["role"] == "user" for m in history):
-        history.append({"role": "user", "content": user_msg})
 
-    messages = [CONTEXT_PROMPT] + history
-    
-    response_text = llm.generate_response(messages)
-
-    await memory.append_turn(from_number, role="system", content=response_text)
-
-    # send_whatsapp_message(from_number, response_text)
-
-    return Response(status_code=200)
-
+@app.post("/debug/migrate-memory")
+async def migrate_memory_endpoint(user_id: str):
+    try:
+        print(user_id)
+        orchestrator = await CognitiveOrchestrator.from_defaults()
+        await orchestrator.persist_conversation_closure(user_id)
+        return {"message": f"Memoria migrada correctamente para el usuario {user_id}"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # Author information endpoint
@@ -149,5 +125,5 @@ async def get_author():
         "name": "Leonardo HG",
         "location": "Ciudad de México",
         "role": "Backend Developer",
-        "project": "Tech Challenge - Kabot"
+        "project": "Tech Challenge - Kabot",
     }

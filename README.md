@@ -65,4 +65,34 @@ Skipping this step will cause the application to fail when trying to interact wi
 
 ---
 
-Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
+Built with 💻 and lots of coffee ☕️ by Leonardo.
+
+
+## Conversation Memory Use Cases
+
+Kabot incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
+
+### UC01: Initial Conversation Bootstrapping
+When a user starts a new conversation, the system retrieves and loads:
+- A summarized memory (semantic context)
+- A structured factual memory (preferences, identity, traits)
+
+These components are injected as non-conversational context to prime the LLM for coherent and personalized responses.
+
+### UC02: Ongoing Interaction
+As the user and assistant exchange messages, each turn is stored in working memory (Redis). This cache:
+- Tracks recent turns for continuity
+- Is kept separate from factual memory and summary memory to avoid mixing signal with noise
+
+### UC03: Contextual Expansion on Demand
+If the LLM cannot resolve a user's query due to insufficient context, the orchestrator:
+- Retrieves the full episodic history from long-term memory (MongoDB)
+- Augments the current prompt with this deep history for accurate reasoning
+
+### UC04: Conversation Closure and Consolidation
+When the conversation ends—either due to inactivity or an explicit farewell—the orchestrator:
+- Persists the working memory into the episodic memory store (append-only)
+- Summarizes the recent session and merges it with the prior summary
+- Extracts any newly revealed facts and updates the factual memory accordingly
+
+This layered approach ensures long-term retention, efficient recall, and low-token consumption during active sessions.

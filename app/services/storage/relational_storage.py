@@ -1,82 +1,72 @@
+import os
 from typing import Any, Dict, List
-from sqlmodel import Session, select, create_engine
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    create_async_engine,
+)
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel, select
+
 from app.services.storage.base import Storage
 from app.models.vehicle import Vehicle
-from sqlalchemy.engine import Engine, create_engine
 
+# Use asyncpg driver for true async support
+DATABASE_URL = os.getenv(
+    "DB_ASYNC_CONNECTION_STR",
+    "postgresql+asyncpg://kabot:kabot123@postgres:5432/kavak"
+)
 
-DATABASE_URL = "postgresql+psycopg2://kabot:password@postgres:5432/kabot"
-engine = create_engine(DATABASE_URL, echo=True)
+# Create an async engine and session factory
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    future=True,
+)
+
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
 
 class RelationalStorage(Storage):
-    """Relational storage implementation using SQLModel and PostgreSQL.
-
-    This class provides methods to interact with a PostgreSQL database
-    using SQLModel for ORM capabilities.
-    """
+    """Asynchronous relational storage implementation using SQLModel and PostgreSQL."""
 
     def __init__(self) -> None:
-        """Initialize the relational storage with a SQLAlchemy engine.
+        """Initialize with the async engine and session factory."""
+        self.engine = engine
+        self.session_local = AsyncSessionLocal
 
-        Args:
-            None
-        """
-        self.engine = RelationalStorage.get_postgres_engine()
+    async def setup(self) -> None:
+        """Asynchronously create database tables based on SQLModel metadata."""
+        async with self.engine.begin() as conn:
+            await conn.run_sync(SQLModel.metadata.create_all)
 
-    def setup(self) -> None:
-        """Create necessary tables in the relational database."""
-        Vehicle.metadata.create_all(self.engine)
+    async def save(self, data: Dict[str, Any]) -> None:
+        """Asynchronously save a single vehicle record to the database."""
+        async with self.session_local() as session:
+            async with session.begin():
+                vehicle = Vehicle(**data)
+                session.add(vehicle)
 
-    def save(self, data: Dict[str, Any]) -> None:
-        """Save a single vehicle record to the database.
-
-        Args:
-            data (Dict[str, Any]): Dictionary containing vehicle data.
-        """
-        with Session(self.engine) as session:
-            vehicle = Vehicle(**data)
-            session.add(vehicle)
-            session.commit()
-
-    def query(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Query vehicle records using filter criteria.
-
-        Args:
-            filters (Dict[str, Any]): Filter criteria as key-value pairs.
-
-        Returns:
-            List[Dict[str, Any]]: List of matching vehicle records.
-        """
-        with Session(self.engine) as session:
+    async def get(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Asynchronously query vehicle records using filter criteria."""
+        async with self.session_local() as session:
             statement = select(Vehicle)
             for key, value in filters.items():
                 statement = statement.where(getattr(Vehicle, key) == value)
-            results = session.exec(statement).all()
-            return [vehicle.model_dump() for vehicle in results]
-
-    def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
-        """Bulk load multiple vehicle records into the database.
-
-        Args:
-            data (Dict): Dictionary with key 'records' containing a list of vehicle records.
-
-        Returns:
-            List[Dict[str, Any]]: List of successfully loaded vehicle records.
-        """
-        vehicles_data = data.get("records", [])
-        vehicles = [Vehicle(**record) for record in vehicles_data]
-
-        with Session(self.engine) as session:
-            session.add_all(vehicles)
-            session.commit()
+            result = await session.execute(statement)
+            vehicles = result.scalars().all()
             return [vehicle.model_dump() for vehicle in vehicles]
-        
-    @staticmethod
-    def get_postgres_engine() -> Engine:
-        """Create a SQLAlchemy engine for PostgreSQL.
 
-        Returns:
-            Engine: The SQLAlchemy engine instance.
-        """
-        postgres_url = "postgresql://kabot:kabot123@postgres:5432/kavak"
-        return create_engine(postgres_url)
+    async def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
+        """Asynchronously bulk load multiple vehicle records into the database."""
+        records = data.get("records", [])
+        async with self.session_local() as session:
+            async with session.begin():
+                vehicles = [Vehicle(**item) for item in records]
+                session.add_all(vehicles)
+        return [vehicle.model_dump() for vehicle in vehicles]
