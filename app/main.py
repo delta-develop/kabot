@@ -139,11 +139,15 @@ async def whatsapp_webhook(request: Request):
     user_msg = sanitize_message(form.get("Body"))
     raw_from = form.get("From")
     from_number = raw_from.split(":")[-1].replace("+", "")
+    sandbox = form.get("Sandbox")
 
     orchestrator = await CognitiveOrchestrator.from_defaults()
     response_text = await orchestrator.handle_incoming_message(from_number, user_msg)
+    
+    print(f"response_text {response_text}")
 
-    send_whatsapp_message(raw_from, response_text)
+    if not sandbox:
+        send_whatsapp_message(raw_from, response_text)
 
     return Response(status_code=200, content=response_text)
 
@@ -160,7 +164,6 @@ async def migrate_memory_endpoint(user_id: str):
         dict: Result message or error.
     """
     try:
-        print(user_id)
         orchestrator = await CognitiveOrchestrator.from_defaults()
         await orchestrator.persist_conversation_closure(user_id)
         return {"message": f"Memoria migrada correctamente para el usuario {user_id}"}

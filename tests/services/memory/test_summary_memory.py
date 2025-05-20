@@ -23,7 +23,7 @@ async def test_store_in_memory(mock_build_prompt, mock_llm_class, mock_storage_c
 
     mock_build_prompt.assert_called_once_with(recent_messages=[{"role": "user", "content": "Hi"}], previous_summary="old summary")
     mock_llm.generate_response.assert_awaited_once_with(["generated prompt"])
-    mock_storage.save.assert_awaited_once_with({"whatsapp_id": "user123", "data": "merged summary"})
+    mock_storage.save.assert_awaited_once_with({"whatsapp_id": "user123", "data": ["merged summary"]})
 
 
 @pytest.mark.asyncio
