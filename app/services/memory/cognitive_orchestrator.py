@@ -7,7 +7,7 @@ from app.prompts.finance import FINANCE_PROMPT
 from app.prompts.kavak import KAVAK_INFO_PROMPT
 from app.prompts.summary import summarize_vehicle_results
 from app.services.search.search_handler import perform_vehicle_search
-
+from app.prompts.conversation import build_intention_prompt_instruction
 
 class CognitiveOrchestrator:
     """
@@ -105,7 +105,16 @@ class CognitiveOrchestrator:
             intention = "none"
             llm_reply = llm_raw
         if intention == "episodic_memory":
-            llm_reply = await self._handle_episodic_memory_intention(user_id, user_msg)
+            raw_response = await self._handle_episodic_memory_intention(user_id, user_msg)
+            try:
+                parsed_response = json.loads(raw_response)
+                # Si vuelve a declarar que necesita episodic_memory, se rompe el ciclo
+                if parsed_response.get("intention") == "episodic_memory":
+                    llm_reply = "Lo siento, no tengo suficiente información para responder eso en este momento."
+                else:
+                    llm_reply = parsed_response.get("response", raw_response)
+            except Exception:
+                llm_reply = raw_response
         elif intention == "search":
             llm_reply = await self._handle_search_intention(user_id, user_msg)
         elif intention == "financing":
@@ -118,6 +127,9 @@ class CognitiveOrchestrator:
             llm_reply = await self._handle_exit_intention(user_id, user_msg)
         else:
             await self._store_dialogue(user_id, user_msg, llm_reply)
+
+        if not llm_reply.strip():
+            llm_reply = "Lo siento, no tengo una respuesta para eso en este momento."
         return llm_reply
 
     async def _load_fact_and_summary_context(self, user_id: str) -> tuple[str, str]:

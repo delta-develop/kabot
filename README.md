@@ -44,6 +44,26 @@ This command will:
 
 Skipping this step will cause the application to fail when trying to interact with the databases.
 
+Let the system finish all it tasks, give one or two minutes and then you can send a Postman Request to `/upload` this will save data in postgres and create embeddings with data in opensearch.
+
+![alt text](image.png)
+
+Other available urls:
+
+- `GET /search` Perform a manual search into OpenSearch.
+  Example: `http://localhost:8000/search?query=tracción 4wd`
+
+- `POST /debug/migrate-memory` Enforces system to migrate WorkingMemory to Long-Term  emory. Example: `http://localhost:8000/debug/migrate-memory?user_id=5215578771322`
+
+- `GET /author` Retrieve author data
+
+- `POST /webhook/whatsapp` You can manually simulate the receive of a message, this is a `x-www-form-urlencoded` so it will require fields:
+- `From` with format `whatsapp:+5215578771322`
+- `Body` with the message
+- `Sandbox` By sending `true` you will only see response in Postman but not in whatsapp.
+
+
+
 ### Useful Makefile Commands
 
 - `make rebuild-app` - Rebuilds the Docker containers and runs the application
@@ -73,27 +93,51 @@ Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
 
 Kabot incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
 
-### UC01: Initial Conversation Bootstrapping
+### Initial Conversation Bootstrapping
 When a user starts a new conversation, the system retrieves and loads:
 - A summarized memory (semantic context)
 - A structured factual memory (preferences, identity, traits)
 
 These components are injected as non-conversational context to prime the LLM for coherent and personalized responses.
 
-### UC02: Ongoing Interaction
+### Ongoing Interaction
 As the user and assistant exchange messages, each turn is stored in working memory (Redis). This cache:
 - Tracks recent turns for continuity
 - Is kept separate from factual memory and summary memory to avoid mixing signal with noise
 
-### UC03: Contextual Expansion on Demand
+### Contextual Expansion on Demand
 If the LLM cannot resolve a user's query due to insufficient context, the orchestrator:
 - Retrieves the full episodic history from long-term memory (MongoDB)
 - Augments the current prompt with this deep history for accurate reasoning
 
-### UC04: Conversation Closure and Consolidation
+### Conversation Closure and Consolidation
 When the conversation ends—either due to inactivity or an explicit farewell—the orchestrator:
 - Persists the working memory into the episodic memory store (append-only)
 - Summarizes the recent session and merges it with the prior summary
 - Extracts any newly revealed facts and updates the factual memory accordingly
 
 This layered approach ensures long-term retention, efficient recall, and low-token consumption during active sessions.
+
+
+
+## 📚 Used prompts
+
+```mermaid
+graph TD
+  P1[INTENTION_PROMPT] --> Detecta_intención
+  P2[FILTER_EXTRACTION_PROMPT] --> Extrae_filtros_JSON
+  P3[VEHICLE_SUMMARIZATION_PROMPT] --> Resume_autos
+  P4[FINANCE_PROMPT] --> Estima_mensualidades
+  P5[KAVAK_INFO_PROMPT] --> Responde_dudas_generales
+  P6[EXIT_PROMPT] --> Cierre_conversación
+```
+
+## 🧠 Agent Memory
+
+```mermaid
+graph TD
+  REDIS[Working Memory - Redis] --> CURRENT[Conversación actual]
+  MONGO_FACT[Fact Memory - MongoDB] --> USER_DATA[Datos del usuario]
+  MONGO_SUM[Summary Memory - MongoDB] --> SUMMARY[Resumen de conversaciones]
+  MONGO_EPISODIC[Episodic Memory - MongoDB] --> HISTORY[Historial completo]
+```
