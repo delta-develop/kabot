@@ -431,6 +431,10 @@ is still critical, follow-up issues are filed, and the inter-layer contracts ali
 with numbered tasks, dependencies, and review checkpoints. Validate the plan with the user
 before executing.
 
+The plan document is written in full in the knowledge vault, not in the repository. No
+plan or spec file is ever committed to the repository. The tracker issue carries a brief
+and the vault path to the plan, never the step-by-step detail itself.
+
 *Inviolable — worktrees.* The feature worktree is created by hand **before** the agent
 session starts. The session never creates additional branches or worktrees; the whole
 implementation runs inside the worktree it was launched in. An isolated experiment needs
@@ -500,11 +504,14 @@ touching code.
 
 ### 6.9 Traceability chain
 
-Every commit references its task in the plan; every task references its section in the
-spec; every section carries its *Por qué esta forma* with explicit assumptions. Walking
-that chain with `git blame` answers "why was this decided" months later. If the assumption
-still holds, the bug is genuine and gets a root-cause fix. If it changed, the decision
-needs revisiting — escalate and re-apply Phase 1 to that specific decision.
+Every commit names its tracker issue and task number in the body — the shape used on this
+branch is a `Refs LEO-15 task 3.` line. The tracker issue carries a brief and points at the
+plan in the vault. The plan's task points at its section in the spec, and every section
+carries its *Por qué esta forma* with explicit assumptions. Walking that chain — commit
+trailer to tracker issue to vault plan to spec section — answers "why was this decided"
+months later. If the assumption still holds, the bug is genuine and gets a root-cause fix.
+If it changed, the decision needs revisiting — escalate and re-apply Phase 1 to that
+specific decision.
 
 ## 7. Phase → actor map
 
@@ -546,7 +553,7 @@ retiring its original car-sales domain.
 **In scope:** catalog, hybrid search, multi-store orders, inventory.
 **Out of scope:** ❌ geolocation, ❌ delivery, ❌ payments.
 
-**Runtime**, as pinned in `services/core-api/Dockerfile`,
+**Runtime**, as pinned in the root `Dockerfile` (parameterized with `ARG SERVICE`),
 `services/core-api/pyproject.toml` and the root `uv.lock` (🟢 verified 2026-09-18):
 
 | Component | Version |
