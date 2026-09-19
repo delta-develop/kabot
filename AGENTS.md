@@ -546,8 +546,8 @@ retiring its original car-sales domain.
 **In scope:** catalog, hybrid search, multi-store orders, inventory.
 **Out of scope:** ❌ geolocation, ❌ delivery, ❌ payments.
 
-**Runtime**, as pinned in `services/core-api/Dockerfile` and
-`services/core-api/requirements.txt` (🟢 verified 2026-09-18):
+**Runtime**, as pinned in `services/core-api/Dockerfile`,
+`services/core-api/pyproject.toml` and the root `uv.lock` (🟢 verified 2026-09-18):
 
 | Component | Version |
 |---|---|
@@ -588,11 +588,13 @@ docker-compose.yml           # root orchestration
 
 - Feature work runs in dedicated worktree branches and integrates into `master`, not `main`.
 - The root `Makefile` has no absolute paths and orchestrates `services/core-api`.
-- Dependencies are pinned in `services/core-api/requirements.txt`; `uv` is not in use yet.
+- Dependencies live in a uv workspace: direct dependencies per service in
+  `services/*/pyproject.toml`, the full tree pinned in the root `uv.lock`.
 - OpenSearch was removed in LEO-12. `/search` retains a documented dead
   `SearchEngineStorage` reference until the planned search backend replaces it.
-- There is no `pyproject.toml`, `setup.cfg`, `mypy.ini` or `pytest.ini`. No tool is
-  configured beyond its defaults.
+- Tool configuration is split: black, isort and mypy in the root `pyproject.toml`;
+  pytest per service in `services/*/pyproject.toml`. Pre-commit runs black and isort
+  from the workspace venv.
 
 The Cimientos track continues with **LEO-14** (dependencies), **LEO-15** (migration to
 `uv` plus workspace configuration), **LEO-16** (`motor` to `AsyncMongoClient`), and
@@ -605,13 +607,13 @@ commands, and their real status as of 2026-09-18.
 
 | Check | Command | Status |
 |---|---|---|
-| Tests | `make test` | ⚠️ configured — runs `PYTHONPATH=services/core-api coverage run -m pytest -vvv services/core-api/tests/` then `coverage report -m`; the current shell lacks `coverage` |
-| Lint | — | ❌ NOT AVAILABLE — `black` 25.1.0 and `isort` 6.0.1 are installed, but there is no Makefile target and no configuration file |
-| Typecheck | — | ❌ NOT AVAILABLE — `mypy` 1.15.0 is installed, with no configuration and no target |
+| Tests | `make test` | ✅ AVAILABLE — `uv run pytest tests/ -q` per service |
+| Lint | `make lint` | ✅ AVAILABLE — `black --check` + `isort --check-only`, configured in `pyproject.toml` |
+| Typecheck | `make typecheck` | ⚠️ AVAILABLE, NON-BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and reports 3 residual errors on inherited code: an LSP mismatch between `Storage.get` and `NonRelationalStorage.get`, the unimplemented `NonRelationalStorage.bulk_load`, and the dead `SearchEngineStorage` reference documented in §8. Each needs a real behavioral decision, not a type annotation, so they are tracked as acknowledged debt instead of forced closed |
 
 **What this means in practice.** Phase 5 requires "tests, lint and typecheck green" per
-task. Tests are the only configured gate, but they cannot run in the current shell until
-the existing dependencies are available. Lint and typecheck remain deferred to LEO-15.
+task. Tests and lint are configured gates. Typecheck is available but not a hard gate
+until the 3 residual errors above are resolved by a dedicated task.
 
 Do **not** substitute an improvised command for the missing checks. Running
 `mypy services/core-api/app/` against inherited, unconfigured code produces a large

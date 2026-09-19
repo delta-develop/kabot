@@ -2,7 +2,6 @@ import redis.asyncio as aioredis
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
 
-
 _redis_client = None
 _mongo_client = None
 _openai_client = None

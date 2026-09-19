@@ -24,7 +24,7 @@ class LLMBase(ABC):
         Generate a response based on a list of structured chat messages.
 
         Args:
-            messages (list): A list of messages, where each message is a dictionary 
+            messages (list): A list of messages, where each message is a dictionary
                              containing 'role' and 'content' keys.
 
         Returns:

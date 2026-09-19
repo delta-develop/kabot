@@ -1,6 +1,7 @@
-import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
 
@@ -18,7 +19,9 @@ def orchestrator():
 
 @pytest.mark.asyncio
 async def test_handle_incoming_message_none_intention(orchestrator):
-    orchestrator.llm.generate_response.return_value = '{"intention": "none", "response": "Hello!"}'
+    orchestrator.llm.generate_response.return_value = (
+        '{"intention": "none", "response": "Hello!"}'
+    )
     orchestrator.working_memory.retrieve_from_memory.return_value = []
     orchestrator.fact_memory.retrieve_from_memory.return_value = ""
     orchestrator.summary_memory.retrieve_from_memory.return_value = ""
@@ -31,8 +34,16 @@ async def test_handle_incoming_message_none_intention(orchestrator):
 
 @pytest.mark.asyncio
 async def test_handle_search_intention(orchestrator):
-    with patch("app.services.memory.cognitive_orchestrator.perform_vehicle_search", new_callable=AsyncMock) as mock_search, \
-         patch("app.services.memory.cognitive_orchestrator.summarize_vehicle_results", new_callable=AsyncMock) as mock_summarize:
+    with (
+        patch(
+            "app.services.memory.cognitive_orchestrator.perform_vehicle_search",
+            new_callable=AsyncMock,
+        ) as mock_search,
+        patch(
+            "app.services.memory.cognitive_orchestrator.summarize_vehicle_results",
+            new_callable=AsyncMock,
+        ) as mock_summarize,
+    ):
 
         mock_search.return_value = [{"text": "Vehicle info"}]
         mock_summarize.return_value = "Summarize this"

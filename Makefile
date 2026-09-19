@@ -11,7 +11,7 @@ else ifeq ($(findstring Microsoft,$(shell uname -r)),Microsoft)
 	OPEN_CMD := start
 endif
 
-.PHONY: help up down build build-app open-api logs ps restart rebuild setup shell
+.PHONY: help up down build build-app open-api logs ps restart rebuild setup shell install
 
 help:
 	@echo "Usage: make [target]"
@@ -29,6 +29,7 @@ help:
 	@echo "  rebuild           Rebuilds the 'app' image and restarts all services."
 	@echo "  setup             Runs the setup script to initialize databases."
 	@echo "  shell             Opens an interactive shell in the 'app' service container."
+	@echo "  install           Syncs the uv workspace and installs the pre-commit hook."
 
 # Start all services
 up:
@@ -92,11 +93,29 @@ start: build-up
 
 SERVICES := core-api
 
-test:
+install:
+	uv sync --all-packages
+	uv run --no-sync pre-commit install --allow-missing-config
+
+test: install
 	@for s in $(SERVICES); do \
 		echo "== $$s =="; \
-		(cd services/$$s && uv run pytest tests/ -q) || exit 1; \
+		(cd services/$$s && uv run --no-sync pytest tests/ -q) || exit 1; \
 	done
 
-coverage:
-	cd services/core-api && uv run coverage run -m pytest tests/ && uv run coverage report -m
+coverage: install
+	cd services/core-api && uv run --no-sync coverage run -m pytest tests/ && uv run --no-sync coverage report -m
+
+lint: install
+	uv run --no-sync black --check .
+	uv run --no-sync isort --check-only .
+
+format: install
+	uv run --no-sync black .
+	uv run --no-sync isort .
+
+typecheck: install
+	@for s in $(SERVICES); do \
+		echo "== $$s =="; \
+		(cd services/$$s && uv run --no-sync mypy app) || exit 1; \
+	done

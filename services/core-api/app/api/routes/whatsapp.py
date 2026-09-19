@@ -1,3 +1,5 @@
+from typing import cast
+
 from fastapi import APIRouter, Request, Response
 
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
@@ -20,8 +22,10 @@ async def whatsapp_webhook(request: Request):
         Response: HTTP response with status 200 and response text.
     """
     form = await request.form()
-    user_msg = sanitize_message(form.get("Body"))
-    raw_from = form.get("From")
+    # Twilio's WhatsApp webhook always sends Body/From as text fields, never
+    # file uploads: https://www.twilio.com/docs/whatsapp/api#webhook-parameters
+    user_msg = sanitize_message(cast(str, form.get("Body")))
+    raw_from = cast(str, form.get("From"))
     from_number = raw_from.split(":")[-1].replace("+", "")
     sandbox = form.get("Sandbox")
 

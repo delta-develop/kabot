@@ -1,13 +1,16 @@
 import json
 from typing import Any, Dict, List
 
-from app.prompts.conversation import build_intention_prompt_messages
+from app.prompts.conversation import (
+    build_intention_prompt_instruction,
+    build_intention_prompt_messages,
+)
 from app.prompts.exit import EXIT_PROMPT
 from app.prompts.finance import FINANCE_PROMPT
 from app.prompts.kavak import KAVAK_INFO_PROMPT
 from app.prompts.summary import summarize_vehicle_results
 from app.services.search.search_handler import perform_vehicle_search
-from app.prompts.conversation import build_intention_prompt_instruction
+
 
 class CognitiveOrchestrator:
     """
@@ -15,6 +18,7 @@ class CognitiveOrchestrator:
     including managing different types of memory, interpreting user intentions,
     and generating appropriate responses using a language model.
     """
+
     def __init__(self):
         self.working_memory = None
         self.fact_memory = None
@@ -105,7 +109,9 @@ class CognitiveOrchestrator:
             intention = "none"
             llm_reply = llm_raw
         if intention == "episodic_memory":
-            raw_response = await self._handle_episodic_memory_intention(user_id, user_msg)
+            raw_response = await self._handle_episodic_memory_intention(
+                user_id, user_msg
+            )
             try:
                 parsed_response = json.loads(raw_response)
                 # Si vuelve a declarar que necesita episodic_memory, se rompe el ciclo
@@ -205,11 +211,11 @@ class CognitiveOrchestrator:
 
     @classmethod
     async def from_defaults(cls) -> "CognitiveOrchestrator":
-        from app.services.memory.working_memory import WorkingMemory
-        from app.services.memory.fact_memory import FactMemory
-        from app.services.memory.episodic_memory import EpisodicMemory
-        from app.services.memory.summary_memory import SummaryMemory
         from app.services.llm.openai_client import OpenAIClient
+        from app.services.memory.episodic_memory import EpisodicMemory
+        from app.services.memory.fact_memory import FactMemory
+        from app.services.memory.summary_memory import SummaryMemory
+        from app.services.memory.working_memory import WorkingMemory
 
         orchestrator = cls.__new__(cls)
         orchestrator.llm = OpenAIClient()

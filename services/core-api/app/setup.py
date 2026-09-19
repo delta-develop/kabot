@@ -4,8 +4,7 @@ from app.services.storage.relational_storage import RelationalStorage
 
 
 async def setup_all() -> None:
-    """Initialize all storage backends asynchronously.
-    """
+    """Initialize all storage backends asynchronously."""
     print("Initializing PostgreSQL...")
     relational_storage = RelationalStorage()
     await asyncio.gather(relational_storage.setup())

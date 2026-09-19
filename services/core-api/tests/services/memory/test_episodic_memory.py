@@ -1,6 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.services.memory.episodic_memory import EpisodicMemory
+
 
 @pytest.mark.asyncio
 @patch("app.services.memory.episodic_memory.NonRelationalStorage")
@@ -10,7 +13,10 @@ async def test_store_in_memory(mock_storage_cls):
     memory = EpisodicMemory()
 
     await memory.store_in_memory("123", [{"role": "user", "content": "hello"}])
-    mock_storage.save.assert_awaited_once_with({"whatsapp_id": "123", "data": [{"role": "user", "content": "hello"}]})
+    mock_storage.save.assert_awaited_once_with(
+        {"whatsapp_id": "123", "data": [{"role": "user", "content": "hello"}]}
+    )
+
 
 @pytest.mark.asyncio
 @patch("app.services.memory.episodic_memory.NonRelationalStorage")
@@ -23,6 +29,7 @@ async def test_retrieve_from_memory_found(mock_storage_cls):
     result = await memory.retrieve_from_memory("123")
     assert result == ["msg1", "msg2"]
 
+
 @pytest.mark.asyncio
 @patch("app.services.memory.episodic_memory.NonRelationalStorage")
 async def test_retrieve_from_memory_not_found(mock_storage_cls):
@@ -33,6 +40,7 @@ async def test_retrieve_from_memory_not_found(mock_storage_cls):
 
     result = await memory.retrieve_from_memory("123")
     assert result == []
+
 
 @pytest.mark.asyncio
 @patch("app.services.memory.episodic_memory.NonRelationalStorage")

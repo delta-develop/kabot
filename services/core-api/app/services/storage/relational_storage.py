@@ -4,14 +4,13 @@ from typing import Any, Dict
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
+    async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel, select
 
-from app.services.storage.base import Storage
 from app.models.vehicle import Vehicle
-
+from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
     "DB_ASYNC_CONNECTION_STR", "postgresql+asyncpg://kabot:kabot123@postgres:5432/kavak"
@@ -23,7 +22,7 @@ engine: AsyncEngine = create_async_engine(
     future=True,
 )
 
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
