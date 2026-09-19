@@ -1,37 +1,17 @@
-# Standard library imports
 import csv
-
-# Third-party imports
-import dotenv
-from fastapi import (
-    APIRouter,
-    FastAPI,
-    File,
-    HTTPException,
-    Query,
-    Request,
-    Response,
-    UploadFile,
-)
 from typing import List
 
-# Local application/library specific imports
-import openai
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+
 from app.models.vehicle import Vehicle
-from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
+from app.services.search.search_handler import perform_vehicle_search
 from app.services.storage.relational_storage import RelationalStorage
 from app.utils.helpers import parse_bool, parse_float
-from app.utils.messaging import send_whatsapp_message
-from app.utils.sanitization import sanitize_message
-from app.services.search.search_handler import perform_vehicle_search
 
-dotenv.load_dotenv()
-app = FastAPI()
 router = APIRouter()
-app.include_router(router)
 
 
-@app.get("/search")
+@router.get("/search")
 async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[dict]:
     """
     Performs a semantic search over the vehicle index using the user's query.
@@ -52,7 +32,7 @@ async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[d
         raise HTTPException(status_code=500, detail=f"Search error: {e}")
 
 
-@app.post("/upload")
+@router.post("/upload")
 async def upload_csv(file: UploadFile = File(...)) -> dict:
     """
     Uploads a CSV file and ingests the data into PostgreSQL in chunks.
@@ -103,68 +83,3 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=f"Error processing CSV file: {e}")
 
     return {"message": "Upload successful", "records_processed": total_processed}
-
-
-@app.post("/webhook/whatsapp")
-async def whatsapp_webhook(request: Request):
-    """
-    Receives incoming messages from WhatsApp, processes them through the orchestrator, 
-    and sends a response using the Twilio messaging service.
-
-    Args:
-        request (Request): Incoming HTTP request from Twilio containing message data.
-
-    Returns:
-        Response: HTTP response with status 200 and response text.
-    """
-    form = await request.form()
-    user_msg = sanitize_message(form.get("Body"))
-    raw_from = form.get("From")
-    from_number = raw_from.split(":")[-1].replace("+", "")
-    sandbox = form.get("Sandbox")
-
-    orchestrator = await CognitiveOrchestrator.from_defaults()
-    response_text = await orchestrator.handle_incoming_message(from_number, user_msg)
-    
-    print(f"response_text {response_text}")
-
-    if not sandbox:
-        send_whatsapp_message(raw_from, response_text)
-
-    return Response(status_code=200, content=response_text)
-
-
-@app.post("/debug/migrate-memory")
-async def migrate_memory_endpoint(user_id: str):
-    """
-    Triggers the persistence of memory data to long-term storage for the given user ID.
-
-    Args:
-        user_id (str): The user's phone number identifier.
-
-    Returns:
-        dict: Result message or error.
-    """
-    try:
-        orchestrator = await CognitiveOrchestrator.from_defaults()
-        await orchestrator.persist_conversation_closure(user_id)
-        return {"message": f"Memoria migrada correctamente para el usuario {user_id}"}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-# Author information endpoint
-@app.get("/author")
-async def get_author():
-    """
-    Returns author metadata for the project.
-
-    Returns:
-        dict: Author information.
-    """
-    return {
-        "name": "Leonardo HG",
-        "location": "Ciudad de México",
-        "role": "Backend Developer",
-        "project": "Tech Challenge - Kabot",
-    }

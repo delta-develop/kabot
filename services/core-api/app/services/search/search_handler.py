@@ -15,6 +15,8 @@ async def perform_vehicle_search(query: str, k: int = 5) -> List[dict]:
     Returns:
         List[dict]: Lista de vehículos que coinciden con la búsqueda y los filtros.
     """
+    # TODO: SearchEngineStorage was removed with OpenSearch in LEO-12; replace it
+    # with the planned search backend before /search can work.
     search_engine_storage = SearchEngineStorage()
     prompt = FILTER_EXTRACTION_PROMPT.format(query=query)
     openai_client = OpenAIClient()

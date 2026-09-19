@@ -1,0 +1,3 @@
+# Placeholder for the future frontend deployable unit.
+# Its implementing agent must verify whether it needs its own Dockerfile, dependency manifest,
+# environment configuration, and runtime commands before adding code.
