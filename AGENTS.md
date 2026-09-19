@@ -558,7 +558,7 @@ retiring its original car-sales domain.
 
 | Component | Version |
 |---|---|
-| Python | 3.11.11-slim |
+| Python | 3.14.7-slim |
 | FastAPI / uvicorn / pydantic | 0.141.1 / 0.53.0 / 2.13.5 |
 | MongoDB driver | `motor` 3.7.1 |
 | Redis client | `redis` 8.1.0 |

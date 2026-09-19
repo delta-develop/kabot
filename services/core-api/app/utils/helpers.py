@@ -33,5 +33,5 @@ def parse_float(value: str, default: float = 0.0) -> float:
     """
     try:
         return float(value)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return default
