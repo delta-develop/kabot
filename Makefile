@@ -1,7 +1,11 @@
 # Makefile to manage the Kabot project with Docker Compose
 
 # Variables
-API_URL := http://localhost:8000
+# Reads CORE_API_PORT from .env so open-api targets the port this workspace
+# actually published; falls back to 8000 when there is no .env (installed
+# make is 3.81 on macOS, so $(or ...) is unavailable — $(if ...) instead).
+CORE_API_PORT_FROM_ENV := $(shell sed -n 's/^CORE_API_PORT=//p' .env 2>/dev/null)
+API_URL := http://localhost:$(if $(CORE_API_PORT_FROM_ENV),$(CORE_API_PORT_FROM_ENV),8000)
 
 # Commands to open URLs (tries to be compatible with Linux, macOS, and Windows)
 OPEN_CMD := xdg-open
@@ -11,7 +15,12 @@ else ifeq ($(findstring Microsoft,$(shell uname -r)),Microsoft)
 	OPEN_CMD := start
 endif
 
-.PHONY: help up down build build-app open-api logs ps restart rebuild shell install test lint format typecheck coverage ngrok
+.PHONY: help up down build build-app build-up open-api logs ps restart rebuild shell install test lint format typecheck coverage ngrok
+
+# Materializes .env from the template on a plain clone; a Superset workspace
+# already has one from .superset/setup.sh, so this rule is a no-op there.
+.env: .env.example
+	cp $< $@
 
 help:
 	@echo "Usage: make [target]"
@@ -31,23 +40,23 @@ help:
 	@echo "  install           Syncs the uv workspace and installs the pre-commit hook."
 
 # Start all services
-up:
+up: .env
 	@echo "Starting all services..."
 	docker compose up -d --wait
 
-ngrok:
+ngrok: .env
 	docker compose --profile ngrok up -d
 
 # Stop all services
-down:
+down: .env
 	@echo "Stopping all services..."
 	docker compose -f docker-compose.yml down
 
 # Build all images (if changed)
-build: build-app
+build: .env build-app
 
 # Build the Python application image
-build-app:
+build-app: .env
 	@echo "Building the 'core-api' service image..."
 	docker compose -f docker-compose.yml build core-api
 
@@ -57,29 +66,29 @@ open-api:
 	$(OPEN_CMD) ${API_URL}
 
 # Additional useful commands
-logs:
+logs: .env
 	docker compose -f docker-compose.yml logs -f
 
-logs-app:
+logs-app: .env
 	docker compose -f docker-compose.yml logs -f core-api
 
-ps:
+ps: .env
 	docker compose -f docker-compose.yml ps
 
 restart: down up
 
 rebuild: build-app down up
 
-build-up:
+build-up: .env
 	docker compose build && docker compose up -d
 
-shell:
+shell: .env
 	docker compose exec core-api /bin/bash
 
-psql:
+psql: .env
 	docker compose exec postgres psql -U kabot -d kavak
 
-rebuild-app:
+rebuild-app: .env
 	docker compose build core-api
 	docker compose up -d core-api
 
@@ -109,7 +118,9 @@ format: install
 	uv run --no-sync isort .
 
 typecheck: install
-	@for s in $(SERVICES); do \
+	@status=0; \
+	for s in $(SERVICES); do \
 		echo "== $$s =="; \
-		(cd services/$$s && uv run --no-sync mypy app) || exit 1; \
-	done
+		(cd services/$$s && uv run --no-sync mypy app) || status=1; \
+	done; \
+	exit $$status
