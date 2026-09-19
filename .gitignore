@@ -77,7 +77,6 @@ env/
 ENV/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
 
 # Superset workspace-local files

@@ -594,7 +594,8 @@ docker-compose.yml           # root orchestration
 **Current operational state — read before assuming:**
 
 - Feature work runs in dedicated worktree branches and integrates into `master`, not `main`.
-- The root `Makefile` has no absolute paths and orchestrates `services/core-api`.
+- The root `Makefile` has no absolute paths and orchestrates the three services under
+  `services/` via `SERVICES`.
 - Dependencies live in a uv workspace: direct dependencies per service in
   `services/*/pyproject.toml`, the full tree pinned in the root `uv.lock`.
 - OpenSearch was removed in LEO-12. `/search` retains a documented dead

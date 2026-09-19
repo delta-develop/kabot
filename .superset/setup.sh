@@ -28,7 +28,7 @@ PORT_BASE="$(reserve_port_base)"
 write_port_vars "$PORT_BASE"
 echo "setup: host ports $PORT_BASE-$((PORT_BASE + 9)) reserved"
 
-uv sync --all-packages
+uv sync --all-packages --frozen
 uv run pre-commit install --allow-missing-config
 
 echo "setup: ready. 'make up' starts the stack:"

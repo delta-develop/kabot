@@ -32,8 +32,6 @@ services:
         SERVICE: agent
     ports:
       - "${AGENT_PORT:-8001}:8000"
-    env_file:
-      - .env
     volumes:
       - ./services/agent:/src/services/agent
 
@@ -45,8 +43,6 @@ services:
         SERVICE: memory
     ports:
       - "${MEMORY_PORT:-8002}:8000"
-    env_file:
-      - .env
     volumes:
       - ./services/memory:/src/services/memory
 

@@ -4,7 +4,7 @@
 # Reads CORE_API_PORT from .env so open-api targets the port this workspace
 # actually published; falls back to 8000 when there is no .env (installed
 # make is 3.81 on macOS, so $(or ...) is unavailable — $(if ...) instead).
-CORE_API_PORT_FROM_ENV := $(shell sed -n 's/^CORE_API_PORT=//p' .env 2>/dev/null)
+CORE_API_PORT_FROM_ENV := $(shell sed -n 's/^CORE_API_PORT=//p' .env 2>/dev/null | tail -1)
 API_URL := http://localhost:$(if $(CORE_API_PORT_FROM_ENV),$(CORE_API_PORT_FROM_ENV),8000)
 
 # Commands to open URLs (tries to be compatible with Linux, macOS, and Windows)
@@ -15,12 +15,15 @@ else ifeq ($(findstring Microsoft,$(shell uname -r)),Microsoft)
 	OPEN_CMD := start
 endif
 
-.PHONY: help up down build build-app build-up open-api logs ps restart rebuild shell install test lint format typecheck coverage
+.PHONY: help up down build build-app build-up open-api logs ps restart rebuild shell install sync test lint format typecheck coverage
 
 # Materializes .env from the template on a plain clone; a Superset workspace
-# already has one from .superset/setup.sh, so this rule is a no-op there.
-.env: .env.example
-	cp $< $@
+# already has one from .superset/setup.sh. Depends only on the target's own
+# absence, not on .env.example's mtime — .env.example is re-stamped by every
+# git checkout/pull/rebase, and a mtime-based rule would then overwrite a
+# populated .env on the next `make up`.
+.env:
+	cp .env.example $@
 
 help:
 	@echo "Usage: make [target]"
@@ -38,6 +41,7 @@ help:
 	@echo "  rebuild           Rebuilds the 'core-api' image and restarts all services."
 	@echo "  shell             Opens an interactive shell in the 'core-api' service container."
 	@echo "  install           Syncs the uv workspace and installs the pre-commit hook."
+	@echo "  sync              Syncs the uv workspace only, without touching git hooks."
 
 # Start all services
 up: .env
@@ -93,28 +97,30 @@ start: build-up
 
 SERVICES := core-api agent memory
 
-install:
-	uv sync --all-packages
+sync:
+	uv sync --all-packages --frozen
+
+install: sync
 	uv run --no-sync pre-commit install --allow-missing-config
 
-test: install
+test: sync
 	@for s in $(SERVICES); do \
 		echo "== $$s =="; \
 		(cd services/$$s && uv run --no-sync pytest tests/ -q) || exit 1; \
 	done
 
-coverage: install
+coverage: sync
 	cd services/core-api && uv run --no-sync coverage run -m pytest tests/ && uv run --no-sync coverage report -m
 
-lint: install
+lint: sync
 	uv run --no-sync black --check .
 	uv run --no-sync isort --check-only .
 
-format: install
+format: sync
 	uv run --no-sync black .
 	uv run --no-sync isort .
 
-typecheck: install
+typecheck: sync
 	@status=0; \
 	for s in $(SERVICES); do \
 		echo "== $$s =="; \

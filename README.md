@@ -64,6 +64,9 @@ make lint
 make typecheck
 ```
 
+`make typecheck` exits non-zero: it reports 3 known errors in inherited
+`core-api` code, tracked as debt (see `AGENTS.md` §9).
+
 You can send a Postman request to `/upload`; this will save data in postgres and create embeddings with data in opensearch.
 
 ![alt text](image.png)
