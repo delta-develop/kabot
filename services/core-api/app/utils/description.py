@@ -1,5 +1,6 @@
 from app.models.vehicle import Vehicle
 
+
 def build_vehicle_description(vehicle: Vehicle) -> str:
     """Constructs a textual description of a vehicle's details.
 

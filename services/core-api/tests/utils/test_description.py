@@ -1,6 +1,8 @@
 import pytest
-from app.utils.description import build_vehicle_description
+
 from app.models.vehicle import Vehicle
+from app.utils.description import build_vehicle_description
+
 
 def test_build_vehicle_description():
     vehicle = Vehicle(
@@ -15,7 +17,7 @@ def test_build_vehicle_description():
         largo=4460.0,
         ancho=1795.0,
         altura=1450.0,
-        car_play=True
+        car_play=True,
     )
 
     expected_description = (

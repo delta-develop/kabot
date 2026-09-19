@@ -125,6 +125,7 @@ async def summarize_vehicle_results(results: list) -> str:
         str: Prompt formateado con los resultados listos para el LLM.
     """
     import json
+
     formatted_results = json.dumps(results, indent=2, ensure_ascii=False)
     prompt = VEHICLE_SUMMARIZATION_PROMPT.format(results=formatted_results)
     return prompt

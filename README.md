@@ -21,34 +21,53 @@ Kabot is a data ingestion and indexing system that allows uploading CSV files, p
 ### Requirements
 
 - Docker and Docker Compose
+- [uv](https://docs.astral.sh/uv/) — `brew install uv`
 - Make
 
 ### Running the Project
 
-To start the application:
-
 ```bash
-make start
+cp .env.example .env    # only outside a Superset workspace; setup does it for you
+make up
 ```
 
-This will build and run all required containers (API, PostgreSQL, OpenSearch, etc.).
+`make up` waits for Mongo, Redis and Postgres to report healthy before starting
+`core-api`, which creates its own PostgreSQL schema on startup. There is no
+separate initialization step.
 
-### Initial Setup
+Services listen on the ports in `.env`. Inside a Superset workspace those come
+from a reserved block, so several workspaces run side by side:
 
-After running the containers, you **must** initialize the databases by running:
+| Service | Variable | Default |
+|---|---|---|
+| core-api | `CORE_API_PORT` | 8000 |
+| agent | `AGENT_PORT` | 8001 |
+| memory | `MEMORY_PORT` | 8002 |
+| postgres | `POSTGRES_PORT` | 5432 |
+| mongo | `MONGO_PORT` | 27017 |
+| redis | `REDIS_PORT` | 6379 |
+
+To start a single service: `docker compose up -d --wait memory`.
+
+> **Orphaned containers from before the compose project name was pinned:** if you
+> ran this stack before `docker-compose.yml` started setting `name: kabot-${PORT_BASE:-8000}`,
+> your old containers and volumes live under the previous implicit project name (the
+> worktree's directory name), and `docker compose down -v` here will not remove them.
+> No data is lost, but they linger. List and remove them with:
+> `docker compose -p <old-name> down -v`.
+
+### Tests
 
 ```bash
-make setup
+make test        # every service
+make lint
+make typecheck
 ```
 
-This command will:
+`make typecheck` exits non-zero: it reports 3 known errors in inherited
+`core-api` code, tracked as debt (see `AGENTS.md` §9).
 
-- Create the required tables in PostgreSQL
-- Create the index in OpenSearch
-
-Skipping this step will cause the application to fail when trying to interact with the databases.
-
-Let the system finish all it tasks, give one or two minutes and then you can send a Postman Request to `/upload` this will save data in postgres and create embeddings with data in opensearch.
+You can send a Postman request to `/upload`; this will save data in postgres and create embeddings with data in opensearch.
 
 ![alt text](image.png)
 
@@ -70,12 +89,19 @@ Other available urls:
 
 ### Useful Makefile Commands
 
-- `make rebuild-app` - Rebuilds the Docker containers and runs the application
-- `make setup` - Initializes database schemas (PostgreSQL + OpenSearch)
-- `make enter-app` - Enters the running app container
-- `make activate-venv` - Activates the virtual environment inside the container
-- `make rebuild-python` - Rebuilds only the Python-related containers without resetting databases
+- `make up` - Starts all services in the background
+- `make down` - Stops and removes all containers
+- `make build` - Builds the service images
+- `make rebuild-app` - Rebuilds the `core-api` image and restarts all services
 - `make logs` - Follows the logs of all Docker containers
+- `make ps` - Lists running containers
+- `make shell` - Opens a shell in the `core-api` container
+- `make psql` - Opens a `psql` session against the `postgres` container
+- `make test` - Runs the test suite for every service
+- `make lint` - Checks formatting with black and isort
+- `make format` - Applies black and isort formatting
+- `make typecheck` - Runs mypy for every service
+- `make coverage` - Runs `core-api` tests with coverage
 
 ### API Endpoint
 

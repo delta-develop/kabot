@@ -1,8 +1,8 @@
 import json
-from app.services.memory.memory import Memory
-from app.services.storage.cache_storage import CacheStorage
 from typing import Any
 
+from app.services.memory.memory import Memory
+from app.services.storage.cache_storage import CacheStorage
 
 
 class WorkingMemory(Memory):

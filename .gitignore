@@ -77,8 +77,12 @@ env/
 ENV/
 
 # Docker
-.dockerignore
 docker-compose.override.yml
+
+# Superset workspace-local files
+.superset/config.local.json
+.superset/port-registry.local.json
+.superset/port-registry.local.json.lock
 
 # IDEs and editors
 .idea/

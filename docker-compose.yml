@@ -1,54 +1,89 @@
+# Named per workspace so two worktrees never share containers or the
+# mongo_data/pg_data volumes; PORT_BASE is unique per workspace (see
+# .superset/ports.sh) and is the isolation key, not just the published ports.
+name: kabot-${PORT_BASE:-8000}
+
 services:
-  app:
-    build: ./services/core-api
-    container_name: kabot
+  core-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: core-api
     ports:
-      - "8000:8000"
+      - "${CORE_API_PORT:-8000}:8000"
     depends_on:
-      - mongo
-      - redis
-      - postgres
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     volumes:
-      - ./services/core-api:/app
+      - ./services/core-api:/src/services/core-api
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: agent
+    ports:
+      - "${AGENT_PORT:-8001}:8000"
+    volumes:
+      - ./services/agent:/src/services/agent
+
+  memory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: memory
+    ports:
+      - "${MEMORY_PORT:-8002}:8000"
+    volumes:
+      - ./services/memory:/src/services/memory
 
   mongo:
     image: mongo:5
-    container_name: mongo
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   redis:
     image: redis:7
-    container_name: redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   postgres:
     image: postgres:15
-    container_name: postgres
     environment:
       POSTGRES_USER: kabot
       POSTGRES_PASSWORD: kabot123
       POSTGRES_DB: kavak
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kabot -d kavak"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: ngrok
-    depends_on:
-      - app
-    command: http --domain=trusting-shrew-blindly.ngrok-free.app app:8000
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-
-    
 volumes:
   mongo_data:
   pg_data:

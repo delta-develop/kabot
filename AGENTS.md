@@ -431,6 +431,10 @@ is still critical, follow-up issues are filed, and the inter-layer contracts ali
 with numbered tasks, dependencies, and review checkpoints. Validate the plan with the user
 before executing.
 
+The plan document is written in full in the knowledge vault, not in the repository. No
+plan or spec file is ever committed to the repository. The tracker issue carries a brief
+and the vault path to the plan, never the step-by-step detail itself.
+
 *Inviolable — worktrees.* The feature worktree is created by hand **before** the agent
 session starts. The session never creates additional branches or worktrees; the whole
 implementation runs inside the worktree it was launched in. An isolated experiment needs
@@ -500,11 +504,14 @@ touching code.
 
 ### 6.9 Traceability chain
 
-Every commit references its task in the plan; every task references its section in the
-spec; every section carries its *Por qué esta forma* with explicit assumptions. Walking
-that chain with `git blame` answers "why was this decided" months later. If the assumption
-still holds, the bug is genuine and gets a root-cause fix. If it changed, the decision
-needs revisiting — escalate and re-apply Phase 1 to that specific decision.
+Every commit names its tracker issue and task number in the body — the shape used on this
+branch is a `Refs LEO-15 task 3.` line. The tracker issue carries a brief and points at the
+plan in the vault. The plan's task points at its section in the spec, and every section
+carries its *Por qué esta forma* with explicit assumptions. Walking that chain — commit
+trailer to tracker issue to vault plan to spec section — answers "why was this decided"
+months later. If the assumption still holds, the bug is genuine and gets a root-cause fix.
+If it changed, the decision needs revisiting — escalate and re-apply Phase 1 to that
+specific decision.
 
 ## 7. Phase → actor map
 
@@ -546,20 +553,20 @@ retiring its original car-sales domain.
 **In scope:** catalog, hybrid search, multi-store orders, inventory.
 **Out of scope:** ❌ geolocation, ❌ delivery, ❌ payments.
 
-**Runtime**, as pinned in `services/core-api/Dockerfile` and
-`services/core-api/requirements.txt` (🟢 verified 2026-09-18):
+**Runtime**, as pinned in the root `Dockerfile` (parameterized with `ARG SERVICE`),
+`services/core-api/pyproject.toml` and the root `uv.lock` (🟢 verified 2026-09-18):
 
 | Component | Version |
 |---|---|
-| Python | 3.11.11-slim |
+| Python | 3.14.7-slim |
 | FastAPI / uvicorn / pydantic | 0.141.1 / 0.53.0 / 2.13.5 |
 | MongoDB driver | `motor` 3.7.1 |
 | Redis client | `redis` 8.1.0 |
 | Postgres drivers | `asyncpg` 0.31.0, SQLAlchemy 2.0.54 |
 | LLM client | `openai` 3.16.2 |
 
-**Services** in `docker-compose.yml`: `app`, `mongo:5`, `redis:7`, `postgres:15`,
-and `ngrok`.
+**Services** in `docker-compose.yml`: `core-api`, `agent`, `memory`, `mongo:5`,
+`redis:7`, and `postgres:15`.
 
 **Source layout:**
 
@@ -574,25 +581,28 @@ services/
 │   │   ├── services/
 │   │   └── utils/
 │   ├── tests/               # mirrors app/
-│   ├── Dockerfile
-│   └── requirements.txt
-├── agent/                   # future deployable unit
-└── memory/                  # future deployable unit
+│   └── pyproject.toml
+├── agent/                   # minimal FastAPI app, own pyproject.toml and tests
+└── memory/                  # minimal FastAPI app, own pyproject.toml and tests
 packages/                    # contracts deferred to LEO-18
 frontend/                    # future deployable unit
+Dockerfile                   # root, parameterized with ARG SERVICE
 docker-compose.yml           # root orchestration
-.superset/                   # workspace configuration deferred
+.superset/                   # config.json, setup/teardown scripts, port helpers
 ```
 
 **Current operational state — read before assuming:**
 
 - Feature work runs in dedicated worktree branches and integrates into `master`, not `main`.
-- The root `Makefile` has no absolute paths and orchestrates `services/core-api`.
-- Dependencies are pinned in `services/core-api/requirements.txt`; `uv` is not in use yet.
+- The root `Makefile` has no absolute paths and orchestrates the three services under
+  `services/` via `SERVICES`.
+- Dependencies live in a uv workspace: direct dependencies per service in
+  `services/*/pyproject.toml`, the full tree pinned in the root `uv.lock`.
 - OpenSearch was removed in LEO-12. `/search` retains a documented dead
   `SearchEngineStorage` reference until the planned search backend replaces it.
-- There is no `pyproject.toml`, `setup.cfg`, `mypy.ini` or `pytest.ini`. No tool is
-  configured beyond its defaults.
+- Tool configuration is split: black, isort and mypy in the root `pyproject.toml`;
+  pytest per service in `services/*/pyproject.toml`. Pre-commit runs black and isort
+  from the workspace venv.
 
 The Cimientos track continues with **LEO-14** (dependencies), **LEO-15** (migration to
 `uv` plus workspace configuration), **LEO-16** (`motor` to `AsyncMongoClient`), and
@@ -605,13 +615,13 @@ commands, and their real status as of 2026-09-18.
 
 | Check | Command | Status |
 |---|---|---|
-| Tests | `make test` | ⚠️ configured — runs `PYTHONPATH=services/core-api coverage run -m pytest -vvv services/core-api/tests/` then `coverage report -m`; the current shell lacks `coverage` |
-| Lint | — | ❌ NOT AVAILABLE — `black` 25.1.0 and `isort` 6.0.1 are installed, but there is no Makefile target and no configuration file |
-| Typecheck | — | ❌ NOT AVAILABLE — `mypy` 1.15.0 is installed, with no configuration and no target |
+| Tests | `make test` | ✅ AVAILABLE — `uv run pytest tests/ -q` per service |
+| Lint | `make lint` | ✅ AVAILABLE — `black --check` + `isort --check-only`, configured in `pyproject.toml` |
+| Typecheck | `make typecheck` | ⚠️ AVAILABLE, NON-BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and reports 3 residual errors on inherited code: an LSP mismatch between `Storage.get` and `NonRelationalStorage.get`, the unimplemented `NonRelationalStorage.bulk_load`, and the dead `SearchEngineStorage` reference documented in §8. Each needs a real behavioral decision, not a type annotation, so they are tracked as acknowledged debt instead of forced closed |
 
 **What this means in practice.** Phase 5 requires "tests, lint and typecheck green" per
-task. Tests are the only configured gate, but they cannot run in the current shell until
-the existing dependencies are available. Lint and typecheck remain deferred to LEO-15.
+task. Tests and lint are configured gates. Typecheck is available but not a hard gate
+until the 3 residual errors above are resolved by a dedicated task.
 
 Do **not** substitute an improvised command for the missing checks. Running
 `mypy services/core-api/app/` against inherited, unconfigured code produces a large

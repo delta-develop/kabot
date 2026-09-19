@@ -1,6 +1,5 @@
-from typing import Any
-
 import json
+from typing import Any
 
 from app.prompts.facts import build_fact_merge_prompt
 from app.services.llm.base import LLMBase
