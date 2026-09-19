@@ -552,11 +552,11 @@ retiring its original car-sales domain.
 | Component | Version |
 |---|---|
 | Python | 3.11.11-slim |
-| FastAPI / uvicorn / pydantic | 0.115.12 / 0.34.2 / 2.11.4 |
+| FastAPI / uvicorn / pydantic | 0.141.1 / 0.53.0 / 2.13.5 |
 | MongoDB driver | `motor` 3.7.1 |
-| Redis client | `redis` 6.1.0 |
-| Postgres drivers | `asyncpg` 0.30.0, SQLAlchemy 2.0.41 |
-| LLM client | `openai` 1.78.1 |
+| Redis client | `redis` 8.1.0 |
+| Postgres drivers | `asyncpg` 0.31.0, SQLAlchemy 2.0.54 |
+| LLM client | `openai` 3.16.2 |
 
 **Services** in `docker-compose.yml`: `app`, `mongo:5`, `redis:7`, `postgres:15`,
 and `ngrok`.
