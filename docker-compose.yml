@@ -1,3 +1,8 @@
+# Named per workspace so two worktrees never share containers or the
+# mongo_data/pg_data volumes; PORT_BASE is unique per workspace (see
+# .superset/ports.sh) and is the isolation key, not just the published ports.
+name: kabot-${PORT_BASE:-8000}
+
 services:
   core-api:
     build:
