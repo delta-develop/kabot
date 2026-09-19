@@ -2,7 +2,6 @@ import json
 from typing import List
 from app.prompts.filters import FILTER_EXTRACTION_PROMPT
 from app.services.llm.openai_client import OpenAIClient
-from app.services.storage.search_engine_storage import SearchEngineStorage
 from app.utils.openai_utils import get_embedding
 
 

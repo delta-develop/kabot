@@ -1,13 +1,6 @@
 
 
-import pytest
-from app.utils.helpers import chunk_records, parse_bool, parse_float
-
-
-def test_chunk_records_basic():
-    data = list(range(10))
-    chunks = list(chunk_records(data, chunk_size=3))
-    assert chunks == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+from app.utils.helpers import parse_bool, parse_float
 
 
 def test_parse_bool_true():

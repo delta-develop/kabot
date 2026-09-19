@@ -1,5 +1,5 @@
 FILTER_EXTRACTION_PROMPT = """
-	Actúa como un experto en búsqueda en OpenSearch. A partir de una consulta del usuario, construye un objeto JSON que represente una búsqueda híbrida con el siguiente esquema:
+	A partir de una consulta del usuario, construye un objeto JSON que represente una búsqueda híbrida con el siguiente esquema:
 
 	- Usa `match` para campos de texto como `make`, `model`, `version`.
 	- Usa `term` para campos booleanos como `bluetooth`, `car_play`.

@@ -1,24 +1,3 @@
-from typing import List, Generator, TypeVar
-
-T = TypeVar("T")
-
-
-def chunk_records(
-    records: List[T], chunk_size: int = 100
-) -> Generator[List[T], None, None]:
-    """Split a list of records into chunks.
-
-    Args:
-        records (List[T]): List of items to split.
-        chunk_size (int, optional): Maximum size of each chunk. Defaults to 100.
-
-    Yields:
-        List[T]: A chunk of the original list.
-    """
-    for i in range(0, len(records), chunk_size):
-        yield records[i : i + chunk_size]
-
-
 def parse_bool(value: str) -> bool:
     """Parse a string into a boolean value.
 
