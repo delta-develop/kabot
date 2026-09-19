@@ -653,3 +653,35 @@ commits are merges of `#9` and `#10` from feature branches (🟢 verified via `g
 
 Commits and pushes require explicit per-commit authorization from the user, per operating
 rule 5. This holds even when a plan that contains commits has already been approved.
+
+## 12. Knowledge vault
+
+Plans and specs live here, never in this repository (§6.7 Phase 4):
+
+```
+/Users/leonardohg/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/Proyectos/Elephant
+```
+
+The path contains spaces — quote it.
+
+```bash
+ELEPHANT="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/Proyectos/Elephant"
+ls "$ELEPHANT"
+```
+
+| Path | Contents |
+|---|---|
+| `_index.md` | Project index, stack, architecture, ticket map |
+| `Decisiones.md` | Decision log. Every decision carries its `Por qué esta forma` |
+| `AGENTS.md` | Conventions for writing plans in the vault |
+| `<feature>/_design/plan.md` | Execution plan for one tracker issue |
+
+A tracker issue names its plan by path under `$ELEPHANT`. Read the plan in full before
+touching code.
+
+**If the path is unreachable** — a cloud session with no access to the local filesystem —
+**stop and report.** Do not reconstruct the plan from the issue brief; the brief is
+deliberately incomplete.
+
+`Decisiones.md` is the authority on settled decisions. A plan links a decision rather than
+restating it, and never reopens it.
