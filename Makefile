@@ -15,7 +15,7 @@ else ifeq ($(findstring Microsoft,$(shell uname -r)),Microsoft)
 	OPEN_CMD := start
 endif
 
-.PHONY: help up down build build-app build-up open-api logs ps restart rebuild shell install test lint format typecheck coverage ngrok
+.PHONY: help up down build build-app build-up open-api logs ps restart rebuild shell install test lint format typecheck coverage
 
 # Materializes .env from the template on a plain clone; a Superset workspace
 # already has one from .superset/setup.sh, so this rule is a no-op there.
@@ -43,9 +43,6 @@ help:
 up: .env
 	@echo "Starting all services..."
 	docker compose up -d --wait
-
-ngrok: .env
-	docker compose --profile ngrok up -d
 
 # Stop all services
 down: .env

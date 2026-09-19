@@ -48,7 +48,6 @@ from a reserved block, so several workspaces run side by side:
 | redis | `REDIS_PORT` | 6379 |
 
 To start a single service: `docker compose up -d --wait memory`.
-The ngrok tunnel is opt-in: `make ngrok`.
 
 > **Orphaned containers from before the compose project name was pinned:** if you
 > ran this stack before `docker-compose.yml` started setting `name: kabot-${PORT_BASE:-8000}`,
@@ -95,7 +94,6 @@ Other available urls:
 - `make ps` - Lists running containers
 - `make shell` - Opens a shell in the `core-api` container
 - `make psql` - Opens a `psql` session against the `postgres` container
-- `make ngrok` - Starts the opt-in ngrok tunnel
 - `make test` - Runs the test suite for every service
 - `make lint` - Checks formatting with black and isort
 - `make format` - Applies black and isort formatting

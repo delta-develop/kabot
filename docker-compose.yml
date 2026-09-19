@@ -88,15 +88,6 @@ services:
       timeout: 5s
       retries: 12
 
-  ngrok:
-    image: ngrok/ngrok:latest
-    profiles: [ngrok]
-    depends_on:
-      - core-api
-    command: http --domain=trusting-shrew-blindly.ngrok-free.app core-api:8000
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-
 volumes:
   mongo_data:
   pg_data:

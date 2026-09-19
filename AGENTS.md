@@ -558,8 +558,8 @@ retiring its original car-sales domain.
 | Postgres drivers | `asyncpg` 0.31.0, SQLAlchemy 2.0.54 |
 | LLM client | `openai` 3.16.2 |
 
-**Services** in `docker-compose.yml`: `app`, `mongo:5`, `redis:7`, `postgres:15`,
-and `ngrok`.
+**Services** in `docker-compose.yml`: `core-api`, `agent`, `memory`, `mongo:5`,
+`redis:7`, and `postgres:15`.
 
 **Source layout:**
 
@@ -574,14 +574,14 @@ services/
 │   │   ├── services/
 │   │   └── utils/
 │   ├── tests/               # mirrors app/
-│   ├── Dockerfile
-│   └── requirements.txt
-├── agent/                   # future deployable unit
-└── memory/                  # future deployable unit
+│   └── pyproject.toml
+├── agent/                   # minimal FastAPI app, own pyproject.toml and tests
+└── memory/                  # minimal FastAPI app, own pyproject.toml and tests
 packages/                    # contracts deferred to LEO-18
 frontend/                    # future deployable unit
+Dockerfile                   # root, parameterized with ARG SERVICE
 docker-compose.yml           # root orchestration
-.superset/                   # workspace configuration deferred
+.superset/                   # config.json, setup/teardown scripts, port helpers
 ```
 
 **Current operational state — read before assuming:**
