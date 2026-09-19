@@ -90,6 +90,13 @@ rebuild-app:
 
 start: build-up
 
+SERVICES := core-api
+
 test:
-	PYTHONPATH=services/core-api coverage run -m pytest -vvv services/core-api/tests/
-	coverage report -m
+	@for s in $(SERVICES); do \
+		echo "== $$s =="; \
+		(cd services/$$s && uv run pytest tests/ -q) || exit 1; \
+	done
+
+coverage:
+	cd services/core-api && uv run coverage run -m pytest tests/ && uv run coverage report -m
