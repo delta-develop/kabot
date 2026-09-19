@@ -2,6 +2,10 @@
 
 # KABOT
 
+> **OpenSearch status:** References below are inherited documentation. OpenSearch was
+> removed in LEO-12, `/search` remains intentionally unresolved pending its replacement
+> backend, and the detailed documentation will be updated with that backend.
+
 Kabot is a data ingestion and indexing system that allows uploading CSV files, parsing them, and storing the data both in PostgreSQL and OpenSearch. It is designed with a modular and asynchronous architecture using FastAPI, SQLModel, and Docker.
 
 ## Features

@@ -91,5 +91,5 @@ rebuild-app:
 start: build-up
 
 test:
-	PYTHONPATH=. coverage run -m pytest -vvv tests/
+	PYTHONPATH=services/core-api coverage run -m pytest -vvv services/core-api/tests/
 	coverage report -m
