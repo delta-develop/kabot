@@ -12,6 +12,8 @@ WORKDIR /src
 
 COPY pyproject.toml uv.lock ./
 COPY services/core-api/pyproject.toml services/core-api/
+COPY services/agent/pyproject.toml services/agent/
+COPY services/memory/pyproject.toml services/memory/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package "$SERVICE"

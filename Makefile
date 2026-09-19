@@ -85,7 +85,7 @@ rebuild-app:
 
 start: build-up
 
-SERVICES := core-api
+SERVICES := core-api agent memory
 
 install:
 	uv sync --all-packages
