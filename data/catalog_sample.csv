@@ -1,0 +1,51 @@
+sku,store,name,brand,unit,pack_size,price,stock,description
+bebidas-0001,bebidas,Refresco Cola Regular 355ml,Coca-Cola,caja,24.0,380.0,45,Refresco de cola en lata 355ml caja de 24 piezas. Soda fria para servicio en mesa y venta individual.
+bebidas-0002,bebidas,Refresco Cola Sin Azucar 355ml,Coca-Cola,caja,24.0,390.0,30,Refresco de cola zero sin azucar lata 355ml pack 24. Opcion light para comensales y refresco embotellado.
+bebidas-0003,bebidas,Refresco Sabor Manzana 355ml,Manzana Lift,caja,24.0,360.0,2,Refresco sabor manzana en lata 355ml caja 24 pzas. Chesco dulce para taquerias y loncherias.
+bebidas-0004,bebidas,Refresco Toronja 355ml,Squirt,caja,24.0,370.0,40,Refresco sabor toronja lata 355ml caja de 24. Ideal para preparar palomas con tequila o micheladas.
+bebidas-0005,bebidas,Agua Mineral con Gas 355ml,Penafiel,caja,24.0,340.0,35,Agua mineral de manantial gasificada en lata 355ml. Sifoncito mineral para mezclas y cocteleria.
+bebidas-0006,bebidas,Agua Mineral 600ml,Topochico,caja,24.0,420.0,25,Agua mineral de vidrio 600ml caja 24 botellas. Agua gasificada premium para mesa de restaurante.
+bebidas-0007,bebidas,Agua Purificada sin Gas 500ml,Ciel,caja,24.0,210.0,60,Agua embotellada natural sin gas pet 500ml paquete 24 piezas. Agua pura para hidratacion de clientes.
+bebidas-0008,bebidas,Agua Purificada Garrafon 20L,Bonafont,pieza,20.0,55.0,50,Garrafon de agua purificada ligera 20 litros. Agua en bidon para consumo de cocina y cafetera.
+bebidas-0009,bebidas,Cerveza Clara Lager 355ml,Corona Extra,caja,24.0,480.0,55,Cerveza clara tipo lager botella 355ml cartocito de 24 chelas. Cerveza mexicana para maridaje.
+bebidas-0010,bebidas,Cerveza Ambar Viena 355ml,Victoria,caja,24.0,490.0,3,Cerveza ambar de barril en botella 355ml caja 24. La chela viena tradicional para tacos y garnachas.
+abarrotes-0001,abarrotes,Aceite Vegetal Comestible 20L,Nutrioli,pieza,20.0,780.0,35,Aceite vegetal puro comestible cubeta de 20 litros. Aceite para freidora de restaurante papas y milanesas.
+abarrotes-0002,abarrotes,Aceite de Canola 5L,Capullo,pieza,5.0,260.0,40,Aceite de canola puro bidon 5L. Grasa vegetal sin colesterol para salteados y plancha de cocina.
+abarrotes-0003,abarrotes,Aceite de Oliva Extra Virgen 5L,Carbonell,pieza,5.0,1150.0,15,Aceite de oliva virgen extra lata 5 litros. Oro liquido espanol para ensaladas pastas y vinagretas.
+abarrotes-0004,abarrotes,Harina de Trigo Extra Fina 44kg,San Antonio,costal,44.0,850.0,25,Harina de trigo de fuerza bulto o costal de 44kg. Harina panificable para masa de pizza y reposteria.
+abarrotes-0005,abarrotes,Harina de Maiz Nixtamalizado 20kg,Maseca,costal,20.0,420.0,30,Harina de maiz nixtamalizada costal 20 kilos. Masa instantanea para tortillas sopes y gorditas.
+abarrotes-0006,abarrotes,Arroz Grano Largo Super Extra 25kg,SOS,costal,25.0,680.0,28,Arroz blanco super extra costal 25kg. Arroz que no se bate para guarnicion de arroz rojo o blanco.
+abarrotes-0007,abarrotes,Frijol Negro Jamapa 25kg,La Merced,costal,25.0,890.0,22,Frijol negro seleccionado costal 25 kilos. Legumbre para frijoles charros de la olla o refritos.
+abarrotes-0008,abarrotes,Frijol Pinto Saltillo 25kg,Schettino,costal,25.0,840.0,20,Frijol pinto limpio bulto de 25kg. Frijol cremoso para molletes y frijoles con veneno.
+abarrotes-0009,abarrotes,Azucar Estandar Morena 50kg,Zulka,costal,50.0,1350.0,18,Azucar estandar de cana bulto 50 kilogramos. Endulzante basico para aguas frescas cafe y postres.
+abarrotes-0010,abarrotes,Sal de Mar Grano Grueso 25kg,La Fina,costal,25.0,230.0,45,Sal marina en grano costal 25kg. Sal pura para sazonar cortes de carne caldos y desinfectar verduras.
+carnes_frias-0001,carnes_frias,Queso Tipo Americano Amarillo en Rebanadas 2.2kg,Kraft,pieza,2.2,285.0,35,Queso amarillo de hamburguesa en rebanadas individuales paquete 2.2kg. Queso fundible cheddar para burgers y sandwich.
+carnes_frias-0002,carnes_frias,Queso Manchego Mexicano Barra 3kg,NocheBuena,pieza,3.0,580.0,25,Queso manchego pasteurizado en bloque o barra 3kg. Queso para gratinar quesadillas molletes y sincronizadas.
+carnes_frias-0003,carnes_frias,Queso Mozzarella Rayado Especial Pizza 2kg,Sorrento,pieza,2.0,395.0,40,Queso mozzarella rallado bolsa 2 kilos. Queso hebra fundente con excelente estiramiento para pizza y lasana.
+carnes_frias-0004,carnes_frias,Queso Oaxaca Hebra Fresco 3kg,Flor de Alfalfa,kg,3.0,520.0,2,Queso de hebra tipo oaxaca artesanal bola de 3 kilos. Quesillo fresco para fundir en tlayudas y costras de queso.
+carnes_frias-0005,carnes_frias,Queso Panela Tradicional Canasta 2kg,Fud,pieza,2.0,310.0,28,Queso fresco de canasta panela barra 2kg. Queso blanco bajo en grasa para ensaladas nopales y asar a la plancha.
+carnes_frias-0006,carnes_frias,Jamon de Pierna de Cerdo Extra 4kg,Zwan,pieza,4.0,640.0,25,Jamon de pierna horneado barra 4 kilos. Jamon rosa para rebanar en maquina para tortas y sandwiches.
+carnes_frias-0007,carnes_frias,Jamon de Pavo Virginia 3kg,San Rafael,pieza,3.0,540.0,30,Jamon de pechuga de pavo virginia pieza de 3kg. Fiambre bajo en grasa embutido fino para desayunos buffet.
+carnes_frias-0008,carnes_frias,Jamon Serrano Reserva Espanol Rebanado 500g,Campofrio,pieza,0.5,360.0,3,Jamon serrano curado madurado paquete de 500g rebanado fino. Tapa espanola charcuteria fina para tablas de quesos.
+carnes_frias-0009,carnes_frias,Tocino Ahumado Rebanado Especial 1kg,Fud,kg,1.0,230.0,40,Tocino ahumado de panceta de cerdo rebanado 1 kilo. Tocineta crujiente para hamburguesas huevos con tocino y guisados.
+carnes_frias-0010,carnes_frias,Tocino Grueso en Tiras Plancha 2kg,Bafar,kg,2.0,420.0,22,Tocino corte grueso ahumado paquete 2kg. Tiras de tocino resistentes para envolver camarones o asar a la parrilla.
+carnes-0001,carnes,Carne Molida de Res Especial 80-20 5kg,SuKarne,kg,5.0,750.0,30,Carne molida de res 80/20 magra con grasa ideal paquete 5kg. Carne para hamburguesas jugosas albondigas y picadillo.
+carnes-0002,carnes,Arrachera Marinada Suave de Res 5kg,SuKarne,kg,5.0,1150.0,25,Arrachera de res marinada suave y tierna caja de 5 kilos. Corte marinada para parrilladas tacos de arrachera y fajitas.
+carnes-0003,carnes,Pechuga de Pollo sin Piel sin Hueso 10kg,Bachoco,caja,10.0,1280.0,35,Pechuga de pollo limpia deshuesada y desgrasada caja 10kg. Filete de pollo para asar empanizar o deshebrar en caldo.
+carnes-0004,carnes,Pierna y Muslo de Pollo Mixto 10kg,Pilgrims,caja,10.0,580.0,40,Pierna y muslo de pollo fresco en corte anatomico caja 10kg. Pollo para mole guisados frito estilo kansas y consomé.
+carnes-0005,carnes,Alitas de Pollo Enteras para Botanera 10kg,Tyson,caja,10.0,920.0,28,Alitas de pollo botaneras con punta y codillo caja 10 kilos. Alitas crudas para freir banar en bufalo bbq o mango habanero.
+carnes-0006,carnes,Bistec de Res Suave para Taqueria 5kg,Rancho Don Juan,kg,5.0,890.0,30,Bistec de pulpa blanca de res en milanesa o rebanado paquete 5kg. Carne de res para tacos al carbon fajitas y huaraches.
+carnes-0007,carnes,Costilla de Res Cargada para Caldo 5kg,SuKarne,kg,5.0,680.0,20,Costillar cargado de res cortado en trozos paquete 5kg. Hueso con carne con sabor concentrado para caldo de res y puchero.
+carnes-0008,carnes,Rib Eye Choice Calidad Importada 4kg,Certified Angus Beef,caja,4.0,2450.0,12,Corte fino ribeye importado calidad angus choice paquete 4kg. Ojo de bife marmoleado para asador y cortes premium.
+carnes-0009,carnes,New York Steak Corte Americano 4kg,Sterling Silver,caja,4.0,2200.0,1,Corte new york strip corte americano grueso 4kg. Bife de lomo sin hueso de alta terneza para parrilla y restaurante fino.
+carnes-0010,carnes,Tomahawk Steak con Hueso Largo 3kg,Rancho San Jose,caja,3.0,1890.0,8,Chuleton tomahawk de res con costilla larga limpia 3kg. Corte vistoso para compartir y presentacion estrella de parrilla.
+utensilios-0001,utensilios,Espatula Parrillera de Acero Inoxidable 20cm,Tramontina,pieza,1.0,165.0,35,Espatula parrillera de acero mango de madera remachado 20cm. Pala para aplastar hamburguesas smasheadas y voltear en plancha.
+utensilios-0002,utensilios,Cuchillo de Chef Profesional 8 Pulgadas,Victorinox,pieza,1.0,780.0,25,Cuchillo cebollero santoku suizo hoja de 20cm mango fibrox. Cuchillo filoso multiusos para picar carne verdura y mise en place.
+utensilios-0003,utensilios,Cuchillo Deshuesador Curvo 6 Pulgadas,Victorinox,pieza,1.0,590.0,20,Cuchillo deshuesador flexible de acero inoxidable 15cm. Hoja curva para filetear carne retirar grasa y separar hueso.
+utensilios-0004,utensilios,Pinzas de Cocina de Acero Inoxidable 40cm,Vollrath,pieza,1.0,120.0,40,Tenazas pinzas largas de acero con resorte para parrillero 40cm. Pinzas para mover carbón voltear cortes y servicio en bufet.
+utensilios-0005,utensilios,Sarten de Aluminio con Antiadherente 30cm,T-fal,pieza,1.0,450.0,25,Sarten uso rudo industrial con teflon reforzado 30cm. Sarten antiadherente para huevos omelettes y sellado rapido sin pegar.
+utensilios-0006,utensilios,Sarten de Hierro Fundido Curado 26cm,Lodge,pieza,1.0,680.0,15,Sarten pesado de hierro fundido pre-curado 26cm. Comal para asar al horno retener calor y servir cortes calientes.
+utensilios-0007,utensilios,Olla Vaporera de Aluminio Grueso 40L,Cinsa,pieza,1.0,1150.0,12,Olla vaporera de aluminio reforzado con rejilla tamalera 40 litros. Bote vaporero para tamales pozole y caldos grandes.
+utensilios-0008,utensilios,Comal Redondo de Acero al Carbon 50cm,La Hacienda,pieza,1.0,380.0,18,Comal de lamina de acero para calentar tortillas y garnachas 50cm. Comal taquero redondo para taqueria y antojitos mexicanos.
+utensilios-0009,utensilios,Papel Aluminio Grado Restaurantero Rollo 400m,Reynolds,caja,1.0,680.0,30,Papel aluminio institucional extra ancho rollo con 400 metros con cortador. Papel para envolver comida hornear y cubrir charolas.
+utensilios-0010,utensilios,Papel Film Plastico Adherente Rollo 600m,Kirkland,caja,1.0,540.0,28,Pelicula plastica estirable transparente grado alimenticio 600m. Plastico egapack para conservar recipientes y cubrir en refrigerador.
