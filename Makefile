@@ -11,7 +11,7 @@ else ifeq ($(findstring Microsoft,$(shell uname -r)),Microsoft)
 	OPEN_CMD := start
 endif
 
-.PHONY: help up down build build-app open-api logs ps restart rebuild setup shell install
+.PHONY: help up down build build-app open-api logs ps restart rebuild shell install test lint format typecheck coverage ngrok
 
 help:
 	@echo "Usage: make [target]"
@@ -19,35 +19,37 @@ help:
 	@echo "Available targets:"
 	@echo "  up                Starts all services in the background."
 	@echo "  down              Stops and removes all containers, networks, and (optionally) volumes."
-	@echo "  build             Builds or rebuilds service images (especially 'app')."
-	@echo "  build-app         Specifically builds the 'app' service image."
+	@echo "  build             Builds or rebuilds service images (especially 'core-api')."
+	@echo "  build-app         Specifically builds the 'core-api' service image."
 	@echo "  open-api          Opens the API URL (${API_URL}) in the default browser."
 	@echo "  logs              Shows logs for all services."
-	@echo "  logs-app          Shows logs for the 'app' service."
+	@echo "  logs-app          Shows logs for the 'core-api' service."
 	@echo "  ps                Lists running containers."
 	@echo "  restart           Restarts all services (down + up)."
-	@echo "  rebuild           Rebuilds the 'app' image and restarts all services."
-	@echo "  setup             Runs the setup script to initialize databases."
-	@echo "  shell             Opens an interactive shell in the 'app' service container."
+	@echo "  rebuild           Rebuilds the 'core-api' image and restarts all services."
+	@echo "  shell             Opens an interactive shell in the 'core-api' service container."
 	@echo "  install           Syncs the uv workspace and installs the pre-commit hook."
 
 # Start all services
 up:
 	@echo "Starting all services..."
-	docker-compose -f docker-compose.yml up -d
+	docker compose up -d --wait
+
+ngrok:
+	docker compose --profile ngrok up -d
 
 # Stop all services
 down:
 	@echo "Stopping all services..."
-	docker-compose -f docker-compose.yml down
+	docker compose -f docker-compose.yml down
 
 # Build all images (if changed)
 build: build-app
 
 # Build the Python application image
 build-app:
-	@echo "Building the 'app' service image..."
-	docker-compose -f docker-compose.yml build app
+	@echo "Building the 'core-api' service image..."
+	docker compose -f docker-compose.yml build core-api
 
 # Open API in browser
 open-api:
@@ -56,38 +58,30 @@ open-api:
 
 # Additional useful commands
 logs:
-	docker-compose -f docker-compose.yml logs -f
+	docker compose -f docker-compose.yml logs -f
 
 logs-app:
-	docker-compose -f docker-compose.yml logs -f app
+	docker compose -f docker-compose.yml logs -f core-api
 
 ps:
-	docker-compose -f docker-compose.yml ps
+	docker compose -f docker-compose.yml ps
 
 restart: down up
 
 rebuild: build-app down up
 
 build-up:
-	docker-compose build && docker-compose up -d
-
-# Run setup script to initialize databases
-setup:
-	@echo "Running setup script to initialize databases..."
-	docker-compose exec app python3 -m app.setup
+	docker compose build && docker compose up -d
 
 shell:
-	docker-compose exec app /bin/bash
-venv:
-	@echo "Activating virtual environment..."
-	. venv/bin/activate && exec $$SHELL
+	docker compose exec core-api /bin/bash
 
 psql:
-	docker-compose exec postgres psql -U kabot -d kavak
+	docker compose exec postgres psql -U kabot -d kavak
 
 rebuild-app:
-	docker-compose build app
-	docker-compose up -d app
+	docker compose build core-api
+	docker compose up -d core-api
 
 start: build-up
 
