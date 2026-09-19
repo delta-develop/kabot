@@ -1,6 +1,6 @@
 import redis.asyncio as aioredis
-from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
+from pymongo import AsyncMongoClient
 
 _redis_client = None
 _mongo_client = None
@@ -29,11 +29,11 @@ async def get_mongo_client(mongo_url="mongodb://mongo:27017/kabot"):
         mongo_url (str): MongoDB connection URL.
 
     Returns:
-        AsyncIOMotorClient: An asynchronous MongoDB client instance.
+        AsyncMongoClient: An asynchronous MongoDB client instance.
     """
     global _mongo_client
     if _mongo_client is None:
-        _mongo_client = AsyncIOMotorClient(mongo_url)
+        _mongo_client = AsyncMongoClient(mongo_url)
     return _mongo_client
 
 

@@ -560,7 +560,7 @@ retiring its original car-sales domain.
 |---|---|
 | Python | 3.14.7-slim |
 | FastAPI / uvicorn / pydantic | 0.141.1 / 0.53.0 / 2.13.5 |
-| MongoDB driver | `motor` 3.7.1 |
+| MongoDB driver | PyMongo (`AsyncMongoClient`) 4.18.1 |
 | Redis client | `redis` 8.1.0 |
 | Postgres drivers | `asyncpg` 0.31.0, SQLAlchemy 2.0.54 |
 | LLM client | `openai` 3.16.2 |
