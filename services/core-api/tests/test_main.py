@@ -1,3 +1,5 @@
+from fastapi.routing import iter_route_contexts
+
 from app.main import app
 
 
@@ -11,8 +13,8 @@ def test_expected_routes_are_registered():
     }
     registered_routes = {
         (method, route.path)
-        for route in app.routes
-        for method in route.methods
+        for route in iter_route_contexts(app.routes)
+        for method in route.methods or ()
     }
 
     assert expected_routes <= registered_routes
