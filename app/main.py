@@ -17,12 +17,9 @@ from typing import List
 
 # Local application/library specific imports
 import openai
-from app.utils.openai_utils import get_embedding
-from app.utils.description import build_vehicle_description
 from app.models.vehicle import Vehicle
 from app.services.memory.cognitive_orchestrator import CognitiveOrchestrator
 from app.services.storage.relational_storage import RelationalStorage
-from app.services.storage.search_engine_storage import SearchEngineStorage
 from app.utils.helpers import parse_bool, parse_float
 from app.utils.messaging import send_whatsapp_message
 from app.utils.sanitization import sanitize_message
@@ -58,7 +55,7 @@ async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[d
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...)) -> dict:
     """
-    Uploads a CSV file and ingests the data into PostgreSQL and OpenSearch in chunks.
+    Uploads a CSV file and ingests the data into PostgreSQL in chunks.
 
     Args:
         file (UploadFile): CSV file uploaded by the user.
@@ -72,7 +69,6 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
         total_processed = 0
 
         relational_storage = RelationalStorage()
-        search_engine_storage = SearchEngineStorage()
 
         for row in reader:
             try:
@@ -96,25 +92,11 @@ async def upload_csv(file: UploadFile = File(...)) -> dict:
 
             if len(records) == 10:
                 await relational_storage.bulk_load({"records": records})
-                for record in records:
-                    vehicle = Vehicle(**record)
-                    description = build_vehicle_description(vehicle)
-                    vector = await get_embedding(description)
-                    await search_engine_storage.index_with_embedding(
-                        description, record, vector
-                    )
                 total_processed += len(records)
                 records = []
 
         if records:
             await relational_storage.bulk_load({"records": records})
-            for record in records:
-                vehicle = Vehicle(**record)
-                description = build_vehicle_description(vehicle)
-                vector = await get_embedding(description)
-                await search_engine_storage.index_with_embedding(
-                    description, record, vector
-                )
             total_processed += len(records)
 
     except Exception as e:
