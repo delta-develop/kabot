@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 from app.utils.messaging import send_whatsapp_message
 
+@patch("app.utils.messaging.whatsapp_from", "whatsapp:+14155238886")
 @patch("app.utils.messaging.client.messages.create")
 def test_send_whatsapp_message(mock_create):
     to = "whatsapp:+521234567890"
