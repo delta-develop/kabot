@@ -1,13 +1,18 @@
+import os
+
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
 from pymongo import AsyncMongoClient
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017/elephant")
 
 _redis_client = None
 _mongo_client = None
 _openai_client = None
 
 
-async def get_redis_client(redis_url="redis://redis:6379"):
+async def get_redis_client(redis_url=REDIS_URL):
     """Initialize and return a singleton Redis client.
 
     Args:
@@ -22,7 +27,7 @@ async def get_redis_client(redis_url="redis://redis:6379"):
     return _redis_client
 
 
-async def get_mongo_client(mongo_url="mongodb://mongo:27017/elephant"):
+async def get_mongo_client(mongo_url=MONGO_URL):
     """Initialize and return a singleton MongoDB client.
 
     Args:
@@ -45,8 +50,6 @@ async def get_openai_client():
     """
     global _openai_client
     if _openai_client is None:
-        import os
-
         api_key = os.getenv("OPENAI_API_KEY")
         _openai_client = AsyncOpenAI(api_key=api_key)
     return _openai_client
