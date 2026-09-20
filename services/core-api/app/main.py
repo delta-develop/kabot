@@ -5,6 +5,7 @@ import logfire
 from fastapi import FastAPI
 
 from app.api.routes.meta import router as meta_router
+from app.api.routes.recall import router as recall_router
 from app.api.routes.sessions import router as sessions_router
 from app.services.storage.relational_storage import RelationalStorage
 
@@ -30,3 +31,4 @@ logfire.instrument_pymongo()
 
 app.include_router(meta_router)
 app.include_router(sessions_router)
+app.include_router(recall_router)

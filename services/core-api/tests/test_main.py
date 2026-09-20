@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from app.api.routes.sessions import close_session, get_session
 from app.main import app
 from app.models.session import SessionDocument
+from app.models.turn import Fragment, Turn
+from app.utils.openai_utils import MAX_EMBEDDING_INPUT_BYTES
 
 
 def test_expected_routes_are_registered():
@@ -17,6 +19,7 @@ def test_expected_routes_are_registered():
         ("POST", "/sessions"),
         ("GET", "/sessions/{session_id}"),
         ("POST", "/sessions/{session_id}/close"),
+        ("GET", "/subjects/{subject_id}/recall"),
         ("GET", "/author"),
     }
     registered_routes = {
@@ -186,3 +189,167 @@ def test_lifespan_creates_the_relational_schema(mocker):
         pass
 
     setup.assert_awaited_once()
+
+
+def test_recall_without_history_skips_embedding(mocker):
+    episodic_memory = AsyncMock()
+    episodic_memory.has_turns.return_value = False
+    mocker.patch("app.api.routes.recall.EpisodicMemory", return_value=episodic_memory)
+    get_embedding = mocker.patch(
+        "app.api.routes.recall.get_embedding", new_callable=AsyncMock
+    )
+
+    response = TestClient(app).get(
+        "/subjects/leo/recall", params={"q": "where should I eat?"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+    episodic_memory.has_turns.assert_awaited_once_with("leo")
+    get_embedding.assert_not_awaited()
+    episodic_memory.similar.assert_not_awaited()
+
+
+def test_recall_embeds_query_once_and_omits_internal_turn_fields(mocker):
+    first_ts = datetime(2026, 1, 1, tzinfo=UTC)
+    second_ts = datetime(2026, 1, 2, tzinfo=UTC)
+    first_turn = Turn(
+        subject_id="leo",
+        session_id="first-session",
+        seq=14,
+        ts=first_ts,
+        user_text="Where did I eat?",
+        assistant_text="Roma Norte",
+        embedding=[1.0] + [0.0] * 1535,
+    )
+    second_turn = Turn(
+        subject_id="leo",
+        session_id="second-session",
+        seq=3,
+        ts=second_ts,
+        user_text="Another memory",
+        assistant_text="Another answer",
+        embedding=[0.0, 1.0] + [0.0] * 1534,
+    )
+    fragments = [
+        Fragment(
+            turns=[first_turn],
+            session_id="first-session",
+            ts=first_ts,
+            similarity=0.9,
+        ),
+        Fragment(
+            turns=[second_turn],
+            session_id="second-session",
+            ts=second_ts,
+            similarity=0.6,
+        ),
+    ]
+    episodic_memory = AsyncMock()
+    episodic_memory.has_turns.return_value = True
+    episodic_memory.similar.return_value = fragments
+    mocker.patch("app.api.routes.recall.EpisodicMemory", return_value=episodic_memory)
+    vector = [0.5] * 1536
+    get_embedding = mocker.patch(
+        "app.api.routes.recall.get_embedding",
+        AsyncMock(return_value=vector),
+    )
+
+    response = TestClient(app).get(
+        "/subjects/leo/recall", params={"q": "where should I eat?"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "turns": [
+                {
+                    "seq": 14,
+                    "ts": "2026-01-01T00:00:00Z",
+                    "user_text": "Where did I eat?",
+                    "assistant_text": "Roma Norte",
+                }
+            ],
+            "session_id": "first-session",
+            "ts": "2026-01-01T00:00:00Z",
+            "similarity": 0.9,
+        },
+        {
+            "turns": [
+                {
+                    "seq": 3,
+                    "ts": "2026-01-02T00:00:00Z",
+                    "user_text": "Another memory",
+                    "assistant_text": "Another answer",
+                }
+            ],
+            "session_id": "second-session",
+            "ts": "2026-01-02T00:00:00Z",
+            "similarity": 0.6,
+        },
+    ]
+    episodic_memory.has_turns.assert_awaited_once_with("leo")
+    get_embedding.assert_awaited_once_with("where should I eat?")
+    episodic_memory.similar.assert_awaited_once_with("leo", vector, 5)
+
+
+@pytest.mark.parametrize("k", [0, 101])
+def test_recall_rejects_k_outside_http_contract(k):
+    response = TestClient(app).get("/subjects/leo/recall", params={"q": "food", "k": k})
+
+    assert response.status_code == 422
+
+
+def test_recall_rejects_empty_query_before_memory_or_embedding(mocker):
+    episodic_memory = AsyncMock()
+    memory_factory = mocker.patch(
+        "app.api.routes.recall.EpisodicMemory", return_value=episodic_memory
+    )
+    get_embedding = mocker.patch(
+        "app.api.routes.recall.get_embedding", new_callable=AsyncMock
+    )
+
+    response = TestClient(app).get("/subjects/leo/recall", params={"q": ""})
+
+    assert response.status_code == 422
+    memory_factory.assert_not_called()
+    get_embedding.assert_not_awaited()
+
+
+def test_recall_rejects_oversized_multibyte_query_before_memory_or_embedding(mocker):
+    episodic_memory = AsyncMock()
+    memory_factory = mocker.patch(
+        "app.api.routes.recall.EpisodicMemory", return_value=episodic_memory
+    )
+    get_embedding = mocker.patch(
+        "app.api.routes.recall.get_embedding", new_callable=AsyncMock
+    )
+    oversized_query = "é" * (MAX_EMBEDDING_INPUT_BYTES // 2 + 1)
+
+    response = TestClient(app).get(
+        "/subjects/leo/recall", params={"q": oversized_query}
+    )
+
+    assert response.status_code == 422
+    memory_factory.assert_not_called()
+    get_embedding.assert_not_awaited()
+
+
+def test_recall_accepts_query_at_exact_byte_limit(mocker):
+    episodic_memory = AsyncMock()
+    episodic_memory.has_turns.return_value = False
+    memory_factory = mocker.patch(
+        "app.api.routes.recall.EpisodicMemory", return_value=episodic_memory
+    )
+    get_embedding = mocker.patch(
+        "app.api.routes.recall.get_embedding", new_callable=AsyncMock
+    )
+    maximum_query = "a" * MAX_EMBEDDING_INPUT_BYTES
+
+    response = TestClient(app).get("/subjects/leo/recall", params={"q": maximum_query})
+
+    assert response.status_code == 200
+    assert response.json() == []
+    memory_factory.assert_called_once_with()
+    episodic_memory.has_turns.assert_awaited_once_with("leo")
+    get_embedding.assert_not_awaited()
