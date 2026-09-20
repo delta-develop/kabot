@@ -86,11 +86,13 @@ async def test_cognitive_orchestrator_from_defaults_naive_flag(mocker):
 
 
 @pytest.mark.asyncio
-async def test_handle_incoming_message_naive_true(orchestrator):
+async def test_naive_history_prompt_starts_with_first_turn_of_first_session(
+    orchestrator,
+):
     orchestrator.naive = True
     orchestrator.episodic_memory.history.return_value = [
-        turn("most recent", seq=1),
-        turn("older", seq=0),
+        turn("first turn of first session", seq=0),
+        turn("last turn of latest session", seq=1),
     ]
     orchestrator.working_memory.retrieve_from_memory.return_value = session(
         turn("working message")
@@ -105,9 +107,11 @@ async def test_handle_incoming_message_naive_true(orchestrator):
     context_content = prompt_messages[1]["content"]
     assert "<fact_memory></fact_memory>" in context_content
     assert "<summary_memory></summary_memory>" in context_content
-    assert "<user>most recent</user>" in context_content
-    assert "<user>older</user>" in context_content
-    assert context_content.index("most recent") < context_content.index("older")
+    assert "<user>first turn of first session</user>" in context_content
+    assert "<user>last turn of latest session</user>" in context_content
+    assert context_content.index("first turn of first session") < context_content.index(
+        "last turn of latest session"
+    )
     assert "working message" not in context_content
     assert "User fact" not in context_content
     assert "User summary" not in context_content

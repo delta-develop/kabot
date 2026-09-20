@@ -75,7 +75,7 @@ async def test_turn_log_writes_vectors_orders_history_and_rejects_duplicate_seq(
 
             history = await storage.history(subject_id)
 
-            assert [item.seq for item in history] == [1, 0]
+            assert [item.seq for item in history] == [0, 1]
             assert len(history[0].embedding) == 1536
             with pytest.raises(IntegrityError):
                 await storage.save_many(

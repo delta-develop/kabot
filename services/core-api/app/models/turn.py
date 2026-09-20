@@ -21,6 +21,7 @@ class Turn(SQLModel, table=True):
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("ix_turn_subject_id", "subject_id"),
     )
 
     # Turn is append-only by discipline, not by a technical constraint; this keeps

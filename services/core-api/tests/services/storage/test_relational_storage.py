@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import UUID
 
@@ -18,12 +18,19 @@ def async_context_manager(value):
     return manager
 
 
-def turn(seq: int = 0) -> Turn:
+NOW = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def turn(
+    seq: int = 0,
+    session_id: str = "session-id",
+    subject_id: str = "leo",
+) -> Turn:
     return Turn(
-        subject_id="leo",
-        session_id="session-id",
+        subject_id=subject_id,
+        session_id=session_id,
         seq=seq,
-        ts=datetime.now(UTC),
+        ts=NOW + timedelta(seconds=seq),
         user_text="hello",
         assistant_text="hi",
         embedding=[0.0] * 1536,
@@ -96,9 +103,28 @@ async def test_save_many_uses_plain_insert():
 
 
 @pytest.mark.asyncio
-async def test_history_orders_most_recent_first_with_tie_breakers():
+async def test_history_orders_all_turns_oldest_first_with_tie_breakers():
     result = MagicMock()
-    result.scalars.return_value.all.return_value = [turn(1), turn(0)]
+    result.scalars.return_value.all.return_value = [turn(0), turn(1)]
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    storage = RelationalStorage()
+    storage.session_local = MagicMock(return_value=async_context_manager(session))
+
+    rows = await storage.history("leo")
+
+    statement = session.execute.await_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "WHERE turn.subject_id" in sql
+    assert "ORDER BY turn.ts ASC, turn.session_id ASC, turn.seq ASC" in sql
+    assert "LIMIT" not in sql
+    assert [row.seq for row in rows] == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_history_selects_latest_limited_turns_then_orders_them_oldest_first():
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [turn(1), turn(2)]
     session = MagicMock()
     session.execute = AsyncMock(return_value=result)
     storage = RelationalStorage()
@@ -108,10 +134,10 @@ async def test_history_orders_most_recent_first_with_tie_breakers():
 
     statement = session.execute.await_args.args[0]
     sql = str(statement.compile(dialect=postgresql.dialect()))
-    assert "WHERE turn.subject_id" in sql
     assert "ORDER BY turn.ts DESC, turn.session_id DESC, turn.seq DESC" in sql
+    assert "ORDER BY turn.ts ASC, turn.session_id ASC, turn.seq ASC" in sql
     assert "LIMIT" in sql
-    assert [row.seq for row in rows] == [1, 0]
+    assert [row.seq for row in rows] == [1, 2]
 
 
 def test_turn_schema_preserves_vector_and_unique_constraint():
@@ -121,7 +147,13 @@ def test_turn_schema_preserves_vector_and_unique_constraint():
     assert any(
         constraint.name == "uq_turn_session_id_seq" for constraint in table.constraints
     )
-    embedding_index = next(index for index in table.indexes)
+    subject_index = next(
+        index for index in table.indexes if index.name == "ix_turn_subject_id"
+    )
+    assert [column.name for column in subject_index.columns] == ["subject_id"]
+    embedding_index = next(
+        index for index in table.indexes if index.name == "ix_turn_embedding_hnsw"
+    )
     assert embedding_index.dialect_options["postgresql"]["using"] == "hnsw"
     assert embedding_index.dialect_options["postgresql"]["ops"] == {
         "embedding": "vector_cosine_ops"

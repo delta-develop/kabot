@@ -73,13 +73,21 @@ class RelationalStorage(Storage):
 
     async def history(self, subject_id: str, limit: int | None = None) -> list[Turn]:
         columns = SQLModel.metadata.tables["turn"].c
-        statement = (
-            select(Turn)
-            .where(columns.subject_id == subject_id)
-            .order_by(columns.ts.desc(), columns.session_id.desc(), columns.seq.desc())
+        if limit is None:
+            statement = select(Turn).where(columns.subject_id == subject_id)
+        else:
+            latest_ids = (
+                select(columns.id)
+                .where(columns.subject_id == subject_id)
+                .order_by(
+                    columns.ts.desc(), columns.session_id.desc(), columns.seq.desc()
+                )
+                .limit(limit)
+            )
+            statement = select(Turn).where(columns.id.in_(latest_ids))
+        statement = statement.order_by(
+            columns.ts.asc(), columns.session_id.asc(), columns.seq.asc()
         )
-        if limit is not None:
-            statement = statement.limit(limit)
         async with self._sessions()() as session:
             result = await session.execute(statement)
             return list(result.scalars().all())
