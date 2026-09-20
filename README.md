@@ -70,7 +70,7 @@ make lint
 make typecheck
 ```
 
-`make typecheck` exits non-zero: it reports 3 known errors in inherited
+`make typecheck` exits non-zero: it reports 2 known errors in inherited
 `core-api` code, tracked as debt (see `AGENTS.md` §9).
 
 `POST /upload?namespace=restaurant-supplies` accepts the catalog CSV and stores each
@@ -83,7 +83,8 @@ Other available urls:
 - `GET /search` performs semantic search in one catalog namespace.
   Example: `http://localhost:8000/search?namespace=restaurant-supplies&query=refresco`
 
-- `POST /debug/migrate-memory` Enforces system to migrate WorkingMemory to Long-Term  emory. Example: `http://localhost:8000/debug/migrate-memory?user_id=5215578771322`
+- `POST /sessions` creates a conversation for a subject.
+- `POST /sessions/{session_id}/close` consolidates and closes a conversation.
 
 - `GET /author` Retrieve author data
 
@@ -126,11 +127,13 @@ Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
 Elephant incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
 
 ### Initial Conversation Bootstrapping
-When a user starts a new conversation, the system retrieves and loads:
+When a user starts a new conversation, the system creates an empty working-memory
+session. While handling messages, it reads:
 - A summarized memory (semantic context)
 - A structured factual memory (preferences, identity, traits)
 
-These components are injected as non-conversational context to prime the LLM for coherent and personalized responses.
+These components are injected as non-conversational context without storing them in
+working memory.
 
 ### Ongoing Interaction
 As the user and assistant exchange messages, each turn is stored in working memory (Redis). This cache:
@@ -143,7 +146,7 @@ If the LLM cannot resolve a user's query due to insufficient context, the orches
 - Augments the current prompt with this deep history for accurate reasoning
 
 ### Conversation Closure and Consolidation
-When the conversation ends—either due to inactivity or an explicit farewell—the orchestrator:
+When the session is explicitly closed, the orchestrator:
 - Persists the working memory into the episodic memory store (append-only)
 - Summarizes the recent session and merges it with the prior summary
 - Extracts any newly revealed facts and updates the factual memory accordingly

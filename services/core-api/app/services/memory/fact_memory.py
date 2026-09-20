@@ -40,7 +40,7 @@ class FactMemory(Memory):
         )
         raw = await self.llm.generate_response([prompt])
         updated_facts = json.loads(raw)
-        await self.storage.save({"whatsapp_id": key, "data": updated_facts})
+        await self.storage.save({"subject_id": key, "data": updated_facts})
 
     async def retrieve_from_memory(self, key: str) -> Any:
         """Retrieves factual memory associated with the given key.
@@ -51,7 +51,7 @@ class FactMemory(Memory):
         Returns:
             Any: The stored facts, if any; otherwise None.
         """
-        doc = await self.storage.get({"whatsapp_id": key})
+        doc = await self.storage.get({"subject_id": key})
         return doc.get("facts") if doc else None
 
     async def delete_from_memory(self, key: str) -> None:

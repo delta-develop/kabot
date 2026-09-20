@@ -1,14 +1,12 @@
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
+from app.models.session import SessionDocument, TurnDraft
 from app.prompts.conversation import build_conversation_prompt
 
 
 class CognitiveOrchestrator:
-    """
-    Orchestrates the cognitive processes for handling user conversations,
-    including managing different types of memory and generating responses using a
-    language model.
-    """
+    """Coordinates conversational responses and layered memory."""
 
     def __init__(self, naive: bool = False):
         self.working_memory: Any = None
@@ -18,166 +16,78 @@ class CognitiveOrchestrator:
         self.llm: Any = None
         self.naive: bool = naive
 
-    async def load_initial_context(self, user_id: str) -> List[Dict[str, str]]:
-        """
-        Loads summary and factual memory into context for LLM priming.
-
-        Args:
-            user_id (str): The ID of the user.
-
-        Returns:
-            List[Dict[str, str]]: The context messages to be used as system prompts.
-        """
-        context = []
-
-        facts = await self.fact_memory.retrieve_from_memory(user_id)
-        if facts:
-            context.append(
-                {
-                    "role": "system",
-                    "content": f"<context>Relevant facts: {str(facts)}</context>",
-                }
-            )
-
-        summary = await self.summary_memory.retrieve_from_memory(user_id)
-        if summary:
-            context.append(
-                {"role": "system", "content": f"<context>{summary}</context>"}
-            )
-
-        if context:
-            context.insert(
-                0,
-                {
-                    "role": "system",
-                    "content": "The following context has been retrieved from memory to help you understand the user. Do not repeat it.",
-                },
-            )
-
-        return context
-
-    async def handle_conversation_start(self, user_id: str) -> List[Dict[str, str]]:
-        """
-        Loads user's summary and facts into working memory at the start of a conversation.
-
-        Args:
-            user_id (str): The ID of the user.
-
-        Returns:
-            List[Dict[str, str]]: Structured messages for initializing the conversation.
-        """
-        context = await self.load_initial_context(user_id)
-        await self.working_memory.store_in_memory(user_id, context)
-        return context
-
-    async def handle_incoming_message(self, user_id: str, user_msg: str) -> str:
-        """
-        Handles an incoming message and generates an appropriate response.
-
-        Args:
-            user_id (str): The ID of the user.
-            user_msg (str): The user's input message.
-
-        Returns:
-            str: The assistant's response.
-        """
-        context = await self.working_memory.retrieve_from_memory(user_id)
-        if not context:
-            context = await self.load_initial_context(user_id)
-            await self.working_memory.store_in_memory(user_id, context)
+    async def handle_incoming_message(
+        self, subject_id: str, session_id: str, user_msg: str
+    ) -> str:
+        """Generates a response using subject and session memory."""
+        session = await self.working_memory.retrieve_from_memory(session_id)
+        if session is None:
+            raise KeyError(f"Session not found: {session_id}")
 
         if self.naive:
-            history_context = await self.expand_context_from_long_term(user_id)
-            history_text = self._format_history(history_context)
+            history = await self.expand_context_from_long_term(subject_id)
             facts, summary = "", ""
         else:
-            working_context = (
-                await self.working_memory.retrieve_from_memory(user_id) or []
-            )
-            history_text = self._format_history(working_context)
-            facts, summary = await self._load_fact_and_summary_context(user_id)
+            history = session.turns
+            facts, summary = await self._load_fact_and_summary_context(subject_id)
 
         prompt_messages = build_conversation_prompt(
-            facts, summary, history_text.strip(), user_msg
+            facts, summary, self._format_history(history), user_msg
         )
         llm_reply = await self.llm.generate_response(prompt_messages)
-
-        await self._store_dialogue(user_id, user_msg, llm_reply)
-
         if not llm_reply.strip():
             llm_reply = "Sorry, I don't have an answer for that right now."
+
+        await self._store_dialogue(session_id, session, user_msg, llm_reply)
         return llm_reply
 
-    async def _load_fact_and_summary_context(self, user_id: str) -> tuple[str, str]:
-        facts = await self.fact_memory.retrieve_from_memory(user_id) or ""
-        summary = await self.summary_memory.retrieve_from_memory(user_id) or ""
+    async def _load_fact_and_summary_context(self, subject_id: str) -> tuple[Any, Any]:
+        facts = await self.fact_memory.retrieve_from_memory(subject_id) or ""
+        summary = await self.summary_memory.retrieve_from_memory(subject_id) or ""
         return facts, summary
 
-    def _format_history(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Formats a list of messages as XML blocks for the prompt.
+    def _format_history(self, turns: list[TurnDraft]) -> str:
+        return "\n".join(
+            f"<user>{turn.user_text}</user>"
+            f"<assistant>{turn.assistant_text}</assistant>"
+            for turn in turns
+        )
 
-        Args:
-            messages (List[Dict[str, str]]): List of message dicts with 'role' and 'content'.
+    async def expand_context_from_long_term(self, subject_id: str) -> list[TurnDraft]:
+        return await self.episodic_memory.retrieve_from_memory(subject_id) or []
 
-        Returns:
-            str: Formatted history string.
-        """
-        history_text = ""
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-            history_text += f"<{role}>{content}</{role}>\n"
-        return history_text.strip()
+    async def persist_conversation_closure(
+        self, subject_id: str, session_id: str
+    ) -> None:
+        session = await self.working_memory.retrieve_from_memory(session_id)
+        if session is None:
+            raise KeyError(f"Session not found: {session_id}")
 
-    async def expand_context_from_long_term(self, user_id: str) -> List[Dict[str, str]]:
-        """
-        Retrieves full episodic memory for a user.
+        if session.turns:
+            episodic_turns = [
+                {"session_id": session_id, **turn.model_dump(mode="json")}
+                for turn in session.turns
+            ]
+            await self.episodic_memory.store_in_memory(subject_id, episodic_turns)
+            await self.summary_memory.store_in_memory(subject_id, session.turns)
+            await self.fact_memory.store_in_memory(subject_id, session.turns)
+        await self.working_memory.delete_from_memory(session_id)
 
-        Args:
-            user_id (str): The ID of the user.
+    async def generate_and_merge_summary(
+        self, subject_id: str, session_id: str
+    ) -> None:
+        session = await self.working_memory.retrieve_from_memory(session_id)
+        if session is None:
+            raise KeyError(f"Session not found: {session_id}")
+        if session.turns:
+            await self.summary_memory.store_in_memory(subject_id, session.turns)
 
-        Returns:
-            List[Dict[str, str]]: The episodic memory entries.
-        """
-        return await self.episodic_memory.retrieve_from_memory(user_id) or []
-
-    async def persist_conversation_closure(self, user_id: str) -> None:
-        """
-        Persists working memory into long-term storage and clears working memory.
-
-        Args:
-            user_id (str): The ID of the user.
-        """
-        data = await self.working_memory.retrieve_from_memory(user_id)
-        if data:
-            filtered = [msg for msg in data if msg.get("content")]
-            await self.episodic_memory.store_in_memory(user_id, filtered)
-            await self.summary_memory.store_in_memory(user_id, filtered)
-            await self.fact_memory.store_in_memory(user_id, filtered)
-            await self.working_memory.delete_from_memory(user_id)
-
-    async def generate_and_merge_summary(self, user_id: str) -> None:
-        """
-        Generates a new summary and stores it in summary memory.
-
-        Args:
-            user_id (str): The ID of the user.
-        """
-        data = await self.working_memory.retrieve_from_memory(user_id)
-        if data:
-            await self.summary_memory.store_in_memory(user_id, {"data": data})
-
-    async def extract_and_update_facts(self, user_id: str) -> None:
-        """
-        Extracts and updates fact memory from recent working memory.
-
-        Args:
-            user_id (str): The ID of the user.
-        """
-        data = await self.working_memory.retrieve_from_memory(user_id)
-        if data:
-            await self.fact_memory.store_in_memory(user_id, {"data": data})
+    async def extract_and_update_facts(self, subject_id: str, session_id: str) -> None:
+        session = await self.working_memory.retrieve_from_memory(session_id)
+        if session is None:
+            raise KeyError(f"Session not found: {session_id}")
+        if session.turns:
+            await self.fact_memory.store_in_memory(subject_id, session.turns)
 
     @classmethod
     async def from_defaults(cls, naive: bool = False) -> "CognitiveOrchestrator":
@@ -194,22 +104,23 @@ class CognitiveOrchestrator:
         orchestrator.episodic_memory = EpisodicMemory()
         orchestrator.summary_memory = SummaryMemory(orchestrator.llm)
         orchestrator.naive = naive
-
         return orchestrator
 
-    async def _store_dialogue(self, user_id: str, user_msg: str, assistant_msg: str):
-        """
-        Stores the user and assistant messages into working memory.
-
-        Args:
-            user_id (str): The ID of the user.
-            user_msg (str): The message from the user.
-            assistant_msg (str): The message generated by the assistant.
-        """
-        await self.working_memory.store_in_memory(
-            user_id,
-            [
-                {"role": "user", "content": user_msg},
-                {"role": "assistant", "content": assistant_msg},
-            ],
+    async def _store_dialogue(
+        self,
+        session_id: str,
+        session: SessionDocument,
+        user_msg: str,
+        assistant_msg: str,
+    ) -> None:
+        now = datetime.now(UTC)
+        session.turns.append(
+            TurnDraft(
+                seq=len(session.turns),
+                ts=now,
+                user_text=user_msg,
+                assistant_text=assistant_msg,
+            )
         )
+        session.last_activity = now
+        await self.working_memory.store_in_memory(session_id, session)

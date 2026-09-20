@@ -598,8 +598,6 @@ docker-compose.yml           # root orchestration
   `services/` via `SERVICES`.
 - Dependencies live in a uv workspace: direct dependencies per service in
   `services/*/pyproject.toml`, the full tree pinned in the root `uv.lock`.
-- OpenSearch was removed in LEO-12. `/search` retains a documented dead
-  `SearchEngineStorage` reference until the planned search backend replaces it.
 - Tool configuration is split: black, isort and mypy in the root `pyproject.toml`;
   pytest per service in `services/*/pyproject.toml`. Pre-commit runs black and isort
   from the workspace venv.
@@ -617,11 +615,11 @@ commands, and their real status as of 2026-09-18.
 |---|---|---|
 | Tests | `make test` | ✅ AVAILABLE — `uv run pytest tests/ -q` per service |
 | Lint | `make lint` | ✅ AVAILABLE — `black --check` + `isort --check-only`, configured in `pyproject.toml` |
-| Typecheck | `make typecheck` | ⚠️ AVAILABLE, NON-BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and reports 3 residual errors on inherited code: an LSP mismatch between `Storage.get` and `NonRelationalStorage.get`, the unimplemented `NonRelationalStorage.bulk_load`, and the dead `SearchEngineStorage` reference documented in §8. Each needs a real behavioral decision, not a type annotation, so they are tracked as acknowledged debt instead of forced closed |
+| Typecheck | `make typecheck` | ⚠️ AVAILABLE, NON-BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and reports 2 residual errors on inherited code: an LSP mismatch between `Storage.get` and `NonRelationalStorage.get`, and the unimplemented `NonRelationalStorage.bulk_load`. Each needs a real behavioral decision, not a type annotation, so they are tracked as acknowledged debt instead of forced closed |
 
 **What this means in practice.** Phase 5 requires "tests, lint and typecheck green" per
 task. Tests and lint are configured gates. Typecheck is available but not a hard gate
-until the 3 residual errors above are resolved by a dedicated task.
+until the 2 residual errors above are resolved by a dedicated task.
 
 Do **not** substitute an improvised command for the missing checks. Running
 `mypy services/core-api/app/` against inherited, unconfigured code produces a large

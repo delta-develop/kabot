@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 from app.services.storage.base import Storage
@@ -34,7 +34,7 @@ class NonRelationalStorage(Storage):
         Save data to the appropriate memory type based on the collection.
 
         Args:
-            data (Dict[str, Any]): Data payload containing whatsapp_id and memory content.
+            data (Dict[str, Any]): Data payload containing subject_id and memory content.
 
         Raises:
             ValueError: If the collection name is invalid.
@@ -74,39 +74,37 @@ class NonRelationalStorage(Storage):
 
     async def delete(self, key: str) -> None:
         """
-        Delete a document from the MongoDB collection by whatsapp_id.
+        Delete a document from the MongoDB collection by subject_id.
 
         Args:
-            key (str): The whatsapp_id of the document to delete.
+            key (str): The subject_id of the document to delete.
         """
         client = await get_mongo_client()
         coll = client.get_default_database()[self.collection_name]
-        await coll.delete_one({"whatsapp_id": key})
+        await coll.delete_one({"subject_id": key})
 
     async def _save_episodic_memory(self, payload):
         """
-        Save a list of message objects into `history` preserving FIFO order.
+        Save turns into `history` preserving FIFO order.
 
         Args:
-            payload (dict): Dictionary with keys 'whatsapp_id' and 'data' where data is a list of messages.
+            payload (dict): Dictionary with subject_id and a list of turns in data.
 
         Raises:
             ValueError: If `data` is not a list.
         """
-        key = payload["whatsapp_id"]
-        messages = payload["data"]
-        if not isinstance(messages, list):
-            raise ValueError(
-                "EpisodicMemory expects `data` to be a list of message objects"
-            )
+        key = payload["subject_id"]
+        turns = payload["data"]
+        if not isinstance(turns, list):
+            raise ValueError("EpisodicMemory expects `data` to be a list of turns")
 
         client = await get_mongo_client()
         coll = client.get_default_database()[self.collection_name]
         await coll.update_one(
-            {"whatsapp_id": key},
+            {"subject_id": key},
             {
-                "$push": {"history": {"$each": messages}},
-                "$set": {"last_updated": datetime.utcnow().isoformat()},
+                "$push": {"history": {"$each": turns}},
+                "$set": {"last_updated": datetime.now(UTC).isoformat()},
             },
             upsert=True,
         )
@@ -116,19 +114,19 @@ class NonRelationalStorage(Storage):
         Replace the entire `facts` object.
 
         Args:
-            payload (dict): Dictionary with keys 'whatsapp_id' and 'data' representing facts to store.
+            payload (dict): Dictionary with keys 'subject_id' and 'data' representing facts to store.
         """
-        key = payload["whatsapp_id"]
+        key = payload["subject_id"]
         new_facts = payload["data"]
 
         client = await get_mongo_client()
         coll = client.get_default_database()[self.collection_name]
         await coll.update_one(
-            {"whatsapp_id": key},
+            {"subject_id": key},
             {
                 "$set": {
                     "facts": new_facts,
-                    "last_updated": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.now(UTC).isoformat(),
                 }
             },
             upsert=True,
@@ -139,19 +137,19 @@ class NonRelationalStorage(Storage):
         Replace the summary text.
 
         Args:
-            payload (dict): Dictionary with keys 'whatsapp_id' and 'data' containing the summary string.
+            payload (dict): Dictionary with keys 'subject_id' and 'data' containing the summary string.
         """
-        key = payload["whatsapp_id"]
+        key = payload["subject_id"]
         summary_text = payload["data"]
 
         client = await get_mongo_client()
         coll = client.get_default_database()[self.collection_name]
         await coll.update_one(
-            {"whatsapp_id": key},
+            {"subject_id": key},
             {
                 "$set": {
                     "summary": summary_text,
-                    "last_updated": datetime.utcnow().isoformat(),
+                    "last_updated": datetime.now(UTC).isoformat(),
                 }
             },
             upsert=True,

@@ -1,13 +1,15 @@
 import json
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.models.session import TurnDraft
 from app.services.memory.fact_memory import FactMemory
 
 
 @pytest.mark.asyncio
-async def test_store_in_memory_merges_and_saves(monkeypatch):
+async def test_store_in_memory_merges_and_saves():
     mock_llm = AsyncMock()
     mock_llm.generate_response.return_value = json.dumps(
         {"name": "Leo", "color_favorito": "verde"}
@@ -17,23 +19,28 @@ async def test_store_in_memory_merges_and_saves(monkeypatch):
     mock_storage.get.return_value = {"facts": {"name": "Leo"}}
     mock_storage.save = AsyncMock()
 
-    with (
-        patch(
-            "app.services.memory.fact_memory.NonRelationalStorage",
-            return_value=mock_storage,
-        ),
-        patch(
-            "app.services.memory.fact_memory.build_fact_merge_prompt",
-            AsyncMock(return_value="prompt"),
-        ),
+    with patch(
+        "app.services.memory.fact_memory.NonRelationalStorage",
+        return_value=mock_storage,
     ):
         fact_memory = FactMemory(llm=mock_llm)
-        await fact_memory.store_in_memory("521123", {"color_favorito": "verde"})
+        recent_turns = [
+            TurnDraft(
+                seq=0,
+                ts=datetime.now(UTC),
+                user_text="My favorite color is green",
+                assistant_text="Noted",
+            )
+        ]
+        await fact_memory.store_in_memory("subject-123", recent_turns)
 
         mock_llm.generate_response.assert_awaited_once()
+        prompt = mock_llm.generate_response.call_args.args[0][0]["content"]
+        assert "user: My favorite color is green" in prompt
+        assert "assistant: Noted" in prompt
         mock_storage.save.assert_awaited_once_with(
             {
-                "whatsapp_id": "521123",
+                "subject_id": "subject-123",
                 "data": {"name": "Leo", "color_favorito": "verde"},
             }
         )
@@ -50,10 +57,10 @@ async def test_retrieve_from_memory_returns_facts():
         return_value=mock_storage,
     ):
         fact_memory = FactMemory(llm=mock_llm)
-        result = await fact_memory.retrieve_from_memory("521123")
+        result = await fact_memory.retrieve_from_memory("subject-123")
 
         assert result == {"name": "Leo"}
-        mock_storage.get.assert_awaited_once_with({"whatsapp_id": "521123"})
+        mock_storage.get.assert_awaited_once_with({"subject_id": "subject-123"})
 
 
 @pytest.mark.asyncio
@@ -67,7 +74,7 @@ async def test_retrieve_from_memory_returns_none_when_not_found():
         return_value=mock_storage,
     ):
         fact_memory = FactMemory(llm=mock_llm)
-        result = await fact_memory.retrieve_from_memory("521123")
+        result = await fact_memory.retrieve_from_memory("subject-123")
 
         assert result is None
 
@@ -83,6 +90,6 @@ async def test_delete_from_memory():
         return_value=mock_storage,
     ):
         fact_memory = FactMemory(llm=mock_llm)
-        await fact_memory.delete_from_memory("521123")
+        await fact_memory.delete_from_memory("subject-123")
 
-        mock_storage.delete.assert_awaited_once_with("521123")
+        mock_storage.delete.assert_awaited_once_with("subject-123")
