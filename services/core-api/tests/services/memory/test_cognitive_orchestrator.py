@@ -18,16 +18,15 @@ def orchestrator():
 
 
 @pytest.mark.asyncio
-async def test_handle_incoming_message_none_intention(orchestrator):
-    orchestrator.llm.generate_response.return_value = (
-        '{"intention": "none", "response": "Hello!"}'
-    )
+async def test_handle_incoming_message_returns_direct_reply(orchestrator):
+    direct_reply = '{"response": "Hello!"}'
+    orchestrator.llm.generate_response.return_value = direct_reply
     orchestrator.working_memory.retrieve_from_memory.return_value = []
     orchestrator.fact_memory.retrieve_from_memory.return_value = ""
     orchestrator.summary_memory.retrieve_from_memory.return_value = ""
 
     response = await orchestrator.handle_incoming_message("user_1", "Hi there")
-    assert response == "Hello!"
+    assert response == direct_reply
     orchestrator.llm.generate_response.assert_awaited()
     orchestrator.working_memory.store_in_memory.assert_awaited()
 
@@ -66,9 +65,7 @@ async def test_handle_incoming_message_naive_true(orchestrator):
     ]
     orchestrator.fact_memory.retrieve_from_memory.return_value = "User fact"
     orchestrator.summary_memory.retrieve_from_memory.return_value = "User summary"
-    orchestrator.llm.generate_response.return_value = (
-        '{"intention": "none", "response": "Hello!"}'
-    )
+    orchestrator.llm.generate_response.return_value = "Hello!"
 
     await orchestrator.handle_incoming_message("user_1", "Test input")
 
@@ -98,9 +95,7 @@ async def test_handle_incoming_message_naive_false(orchestrator):
     ]
     orchestrator.fact_memory.retrieve_from_memory.return_value = "User fact"
     orchestrator.summary_memory.retrieve_from_memory.return_value = "User summary"
-    orchestrator.llm.generate_response.return_value = (
-        '{"intention": "none", "response": "Hello!"}'
-    )
+    orchestrator.llm.generate_response.return_value = "Hello!"
 
     await orchestrator.handle_incoming_message("user_1", "Test input")
 

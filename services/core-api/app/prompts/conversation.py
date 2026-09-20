@@ -1,4 +1,4 @@
-def build_intention_prompt_instruction() -> dict:
+def build_conversation_instruction() -> dict:
     """
     Builds the system instruction for the conversational assistant.
 
@@ -28,11 +28,11 @@ def build_intention_prompt_instruction() -> dict:
     }
 
 
-def build_intention_prompt_messages(
+def build_conversation_prompt(
     fact_memory: str, summary_memory: str, working_memory_text: str, user_msg: str
 ) -> list[dict]:
     """
-    Builds the list of prompt messages for intention identification, including context and user input.
+    Builds the prompt messages with memory context and user input.
 
     Args:
         fact_memory (str): The factual memory context.
@@ -44,7 +44,7 @@ def build_intention_prompt_messages(
         list[dict]: A list of dictionaries representing the conversation messages for the prompt.
     """
     return [
-        build_intention_prompt_instruction(),
+        build_conversation_instruction(),
         {
             "role": "system",
             "content": f"""

@@ -1,14 +1,13 @@
-import json
 from typing import Any, Dict, List
 
-from app.prompts.conversation import build_intention_prompt_messages
+from app.prompts.conversation import build_conversation_prompt
 
 
 class CognitiveOrchestrator:
     """
     Orchestrates the cognitive processes for handling user conversations,
-    including managing different types of memory, interpreting user intentions,
-    and generating appropriate responses using a language model.
+    including managing different types of memory and generating responses using a
+    language model.
     """
 
     def __init__(self, naive: bool = False):
@@ -73,7 +72,7 @@ class CognitiveOrchestrator:
 
     async def handle_incoming_message(self, user_id: str, user_msg: str) -> str:
         """
-        Handles an incoming message from the user, determines the intention, and generates an appropriate response.
+        Handles an incoming message and generates an appropriate response.
 
         Args:
             user_id (str): The ID of the user.
@@ -98,20 +97,15 @@ class CognitiveOrchestrator:
             history_text = self._format_history(working_context)
             facts, summary = await self._load_fact_and_summary_context(user_id)
 
-        prompt_messages = build_intention_prompt_messages(
+        prompt_messages = build_conversation_prompt(
             facts, summary, history_text.strip(), user_msg
         )
-        llm_raw = await self.llm.generate_response(prompt_messages)
-        try:
-            parsed = json.loads(llm_raw)
-            llm_reply = parsed.get("response", llm_raw)
-        except Exception:
-            llm_reply = llm_raw
+        llm_reply = await self.llm.generate_response(prompt_messages)
 
         await self._store_dialogue(user_id, user_msg, llm_reply)
 
         if not llm_reply.strip():
-            llm_reply = "Lo siento, no tengo una respuesta para eso en este momento."
+            llm_reply = "Sorry, I don't have an answer for that right now."
         return llm_reply
 
     async def _load_fact_and_summary_context(self, user_id: str) -> tuple[str, str]:
