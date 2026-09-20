@@ -2,19 +2,15 @@
 
 # KABOT
 
-> **OpenSearch status:** References below are inherited documentation. OpenSearch was
-> removed in LEO-12, `/search` remains intentionally unresolved pending its replacement
-> backend, and the detailed documentation will be updated with that backend.
-
-Kabot is a data ingestion and indexing system that allows uploading CSV files, parsing them, and storing the data both in PostgreSQL and OpenSearch. It is designed with a modular and asynchronous architecture using FastAPI, SQLModel, and Docker.
+Kabot is a data ingestion and search system that stores catalog records and their
+embeddings in PostgreSQL with pgvector. It is built with FastAPI, SQLModel, and Docker.
 
 ## Features
 
 - Upload and process CSV files via HTTP endpoint
-- Store records in PostgreSQL and OpenSearch simultaneously
+- Store catalog records and embeddings atomically in PostgreSQL
 - Chunked and asynchronous processing for performance
-- Uses OpenSearch to allow indexing and searching
-- Uses PostgreSQL for relational data storage
+- Uses pgvector for semantic search
 
 ## Getting Started
 
@@ -34,6 +30,16 @@ make up
 `make up` waits for Mongo, Redis and Postgres to report healthy before starting
 `core-api`, which creates its own PostgreSQL schema on startup. There is no
 separate initialization step.
+
+The pgvector schema change requires a one-time reset before its first startup.
+`docker compose down -v` deletes both named volumes, `pg_data` and `mongo_data`.
+Both volumes are intentionally disposable for this reset; catalog data is regenerated
+from the CSV files in `data/`, and existing Mongo memory data is intentionally discarded:
+
+```bash
+docker compose down -v --remove-orphans
+make up
+```
 
 Services listen on the ports in `.env`. Inside a Superset workspace those come
 from a reserved block, so several workspaces run side by side:
@@ -67,14 +73,15 @@ make typecheck
 `make typecheck` exits non-zero: it reports 3 known errors in inherited
 `core-api` code, tracked as debt (see `AGENTS.md` §9).
 
-You can send a Postman request to `/upload`; this will save data in postgres and create embeddings with data in opensearch.
+`POST /upload?namespace=restaurant-supplies` accepts the catalog CSV and stores each
+item together with its embedding in PostgreSQL.
 
 ![alt text](image.png)
 
 Other available urls:
 
-- `GET /search` Perform a manual search into OpenSearch.
-  Example: `http://localhost:8000/search?query=tracción 4wd`
+- `GET /search` performs semantic search in one catalog namespace.
+  Example: `http://localhost:8000/search?namespace=restaurant-supplies&query=refresco`
 
 - `POST /debug/migrate-memory` Enforces system to migrate WorkingMemory to Long-Term  emory. Example: `http://localhost:8000/debug/migrate-memory?user_id=5215578771322`
 
@@ -105,13 +112,13 @@ Other available urls:
 
 ### API Endpoint
 
-- `POST /upload` - Upload a CSV file to ingest data into the system
+- `POST /upload?namespace=restaurant-supplies` - Ingest a catalog CSV
+- `GET /search?namespace=restaurant-supplies&query=...` - Search the catalog
 
 ## Notes
 
-- The system uses chunked ingestion (100 records per chunk) to avoid memory issues
-- Boolean fields are interpreted from strings like "Sí", "Yes", "True", etc.
-- Duplicate records are avoided in OpenSearch by using `stock_id` as the document ID
+- Catalog ingestion uses batches of 10 records.
+- Reingesting the same `(namespace, external_id)` updates the existing row.
 
 ---
 
