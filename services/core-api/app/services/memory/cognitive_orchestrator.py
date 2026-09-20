@@ -19,12 +19,13 @@ class CognitiveOrchestrator:
     and generating appropriate responses using a language model.
     """
 
-    def __init__(self):
-        self.working_memory = None
-        self.fact_memory = None
-        self.episodic_memory = None
-        self.summary_memory = None
-        self.llm = None
+    def __init__(self, naive: bool = False):
+        self.working_memory: Any = None
+        self.fact_memory: Any = None
+        self.episodic_memory: Any = None
+        self.summary_memory: Any = None
+        self.llm: Any = None
+        self.naive: bool = naive
 
     async def load_initial_context(self, user_id: str) -> List[Dict[str, str]]:
         """
@@ -94,9 +95,17 @@ class CognitiveOrchestrator:
             context = await self.load_initial_context(user_id)
             await self.working_memory.store_in_memory(user_id, context)
 
-        working_context = await self.working_memory.retrieve_from_memory(user_id) or []
-        history_text = self._format_history(working_context)
-        facts, summary = await self._load_fact_and_summary_context(user_id)
+        if self.naive:
+            history_context = await self.expand_context_from_long_term(user_id)
+            history_text = self._format_history(history_context)
+            facts, summary = "", ""
+        else:
+            working_context = (
+                await self.working_memory.retrieve_from_memory(user_id) or []
+            )
+            history_text = self._format_history(working_context)
+            facts, summary = await self._load_fact_and_summary_context(user_id)
+
         prompt_messages = build_intention_prompt_messages(
             facts, summary, history_text.strip(), user_msg
         )
@@ -210,7 +219,7 @@ class CognitiveOrchestrator:
             await self.fact_memory.store_in_memory(user_id, {"data": data})
 
     @classmethod
-    async def from_defaults(cls) -> "CognitiveOrchestrator":
+    async def from_defaults(cls, naive: bool = False) -> "CognitiveOrchestrator":
         from app.services.llm.openai_client import OpenAIClient
         from app.services.memory.episodic_memory import EpisodicMemory
         from app.services.memory.fact_memory import FactMemory
@@ -223,6 +232,7 @@ class CognitiveOrchestrator:
         orchestrator.fact_memory = FactMemory(orchestrator.llm)
         orchestrator.episodic_memory = EpisodicMemory()
         orchestrator.summary_memory = SummaryMemory(orchestrator.llm)
+        orchestrator.naive = naive
 
         return orchestrator
 
