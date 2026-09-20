@@ -33,6 +33,24 @@ jobs:
   core-api:
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      mongo:
+        image: mongo:5
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
       postgres:
         image: pgvector/pgvector:pg15
         env:
@@ -47,6 +65,8 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
+      REDIS_URL: redis://localhost:6379
+      MONGO_URL: mongodb://localhost:27017/elephant
       POSTGRES_INTEGRATION_URL: postgresql+asyncpg://elephant:elephant123@localhost:5432/elephant
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
