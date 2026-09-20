@@ -16,7 +16,8 @@ from app.models.catalog_item import CatalogItem
 from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
-    "DB_ASYNC_CONNECTION_STR", "postgresql+asyncpg://kabot:kabot123@postgres:5432/kavak"
+    "DB_ASYNC_CONNECTION_STR",
+    "postgresql+asyncpg://kabot:kabot123@postgres:5432/elephant",
 )
 
 engine: AsyncEngine | None = None
