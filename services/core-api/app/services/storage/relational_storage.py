@@ -1,96 +1,137 @@
 import os
-from typing import Any, Dict
+from typing import Any
 
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, select
 
-from app.models.vehicle import Vehicle
+from app.models.catalog_item import CatalogItem
+from app.services.search.filters import filters_to_sql
 from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
     "DB_ASYNC_CONNECTION_STR", "postgresql+asyncpg://kabot:kabot123@postgres:5432/kavak"
 )
 
-engine: AsyncEngine = create_async_engine(
-    DATABASE_URL,
-    echo=True,
-    future=True,
-)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+engine: AsyncEngine | None = None
+AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 
 class RelationalStorage(Storage):
-    """Asynchronous relational storage implementation using SQLModel and PostgreSQL.
-
-    Attributes:
-        engine (AsyncEngine): The asynchronous database engine.
-        session_local (sessionmaker): The session factory for async sessions.
-    """
-
     def __init__(self) -> None:
-        """Initialize the storage with async engine and session factory."""
         self.engine = engine
         self.session_local = AsyncSessionLocal
 
     async def setup(self) -> None:
-        """Create database tables asynchronously based on SQLModel metadata.
+        global engine, AsyncSessionLocal
 
-        This method initializes the database schema.
-        """
-        async with self.engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+        bootstrap_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+        try:
+            async with bootstrap_engine.begin() as connection:
+                await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        finally:
+            await bootstrap_engine.dispose()
 
-    async def save(self, data: Dict[str, Any]) -> None:
-        """Save a single vehicle record to the database asynchronously.
+        engine = create_async_engine(DATABASE_URL)
+        AsyncSessionLocal = async_sessionmaker(
+            bind=engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        self.engine = engine
+        self.session_local = AsyncSessionLocal
 
-        Args:
-            data (Dict[str, Any]): The data dictionary representing a vehicle.
-        """
-        async with self.session_local() as session:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+
+    def _sessions(self) -> async_sessionmaker[AsyncSession]:
+        if self.session_local is None:
+            raise RuntimeError("Relational storage is not initialized")
+        return self.session_local
+
+    async def save(self, data: dict[str, Any]) -> None:
+        async with self._sessions()() as session:
             async with session.begin():
-                vehicle = Vehicle(**data)
-                session.add(vehicle)
+                session.add(CatalogItem(**data))
 
-    async def get(self, filters: Dict[str, Any]) -> list[Dict[str, Any]]:
-        """Query vehicle records asynchronously using filter criteria.
-
-        Args:
-            filters (Dict[str, Any]): A dictionary of filter conditions.
-
-        Returns:
-            List[Dict[str, Any]]: A list of vehicles matching the filters.
-        """
-        async with self.session_local() as session:
-            statement = select(Vehicle)
+    async def get(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
+        async with self._sessions()() as session:
+            statement = select(CatalogItem)
             for key, value in filters.items():
-                statement = statement.where(getattr(Vehicle, key) == value)
+                statement = statement.where(getattr(CatalogItem, key) == value)
             result = await session.execute(statement)
-            vehicles = result.scalars().all()
-            return [vehicle.model_dump() for vehicle in vehicles]
+            return [item.model_dump() for item in result.scalars().all()]
 
-    async def bulk_load(self, data: Dict) -> list[Dict[str, Any]]:
-        """Bulk load multiple vehicle records into the database asynchronously.
-
-        Args:
-            data (Dict): A dictionary containing a 'records' key with a list of vehicle data.
-
-        Returns:
-            List[Dict[str, Any]]: The list of loaded vehicle records.
-        """
+    async def bulk_load(self, data: dict) -> list[dict[str, Any]]:
         records = data.get("records", [])
-        async with self.session_local() as session:
+        async with self._sessions()() as session:
             async with session.begin():
-                for item in records:
-                    vehicle = Vehicle(**item)
-                    await session.merge(vehicle)
+                session.add_all(CatalogItem(**item) for item in records)
         return records
+
+    async def upsert_items(self, items: list[dict[str, Any]]) -> None:
+        statement = insert(CatalogItem).values(items)
+        statement = statement.on_conflict_do_update(
+            index_elements=[CatalogItem.namespace, CatalogItem.external_id],
+            set_={
+                "title": statement.excluded.title,
+                "body": statement.excluded.body,
+                "attributes": statement.excluded.attributes,
+                "embedding": statement.excluded.embedding,
+            },
+        )
+        async with self._sessions()() as session:
+            async with session.begin():
+                await session.execute(statement)
+
+    async def knn_search(
+        self,
+        namespace: str,
+        vector: list[float],
+        filters: dict[str, Any] | None = None,
+        k: int = 5,
+    ) -> list[dict[str, Any]]:
+        if not isinstance(k, int) or not 1 <= k <= 100:
+            raise ValueError("k must be between 1 and 100")
+
+        columns = SQLModel.metadata.tables["catalog_item"].c
+        distance = columns.embedding.cosine_distance(vector).label("distance")
+        selected_columns = [
+            columns.id,
+            columns.namespace,
+            columns.external_id,
+            columns.title,
+            columns.body,
+            columns.attributes,
+            distance,
+        ]
+        statement = (
+            select(*selected_columns)
+            .where(
+                columns.namespace == namespace,
+                filters_to_sql(namespace, filters or {}),
+            )
+            .order_by(distance.asc())
+            .limit(k)
+        )
+        async with self._sessions()() as session:
+            result = await session.execute(statement)
+        return [
+            {
+                "id": str(row["id"]),
+                "namespace": row["namespace"],
+                "external_id": row["external_id"],
+                "title": row["title"],
+                "body": row["body"],
+                "attributes": row["attributes"],
+                "distance": float(row["distance"]),
+            }
+            for row in result.mappings().all()
+        ]

@@ -1,85 +1,100 @@
 import csv
-from typing import List
+import json
+from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from app.models.vehicle import Vehicle
-from app.services.search.search_handler import perform_vehicle_search
+from app.services.search.filters import FILTER_SCHEMAS, filters_to_sql
 from app.services.storage.relational_storage import RelationalStorage
-from app.utils.helpers import parse_bool, parse_float
+from app.utils.openai_utils import get_embedding
 
 router = APIRouter()
 
 
-@router.get("/search")
-async def search_similar_vehicles(query: str = Query(...), k: int = 5) -> List[dict]:
-    """
-    Performs a semantic search over the vehicle index using the user's query.
-    Extracts structured filters using a language model before searching.
+def _validate_namespace(namespace: str) -> None:
+    if namespace not in FILTER_SCHEMAS:
+        allowed = ", ".join(sorted(FILTER_SCHEMAS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown namespace '{namespace}'. Allowed namespaces: {allowed}",
+        )
 
-    Args:
-        query (str): User's search input.
-        k (int): Number of similar results to return.
 
-    Returns:
-        List[dict]: Matching vehicles with metadata.
-    """
+def _normalize_row(row: dict[str, str], namespace: str) -> dict[str, Any]:
+    return {
+        "namespace": namespace,
+        "external_id": row["sku"],
+        "title": row["name"],
+        "body": row["description"],
+        "attributes": {
+            "store": row["store"],
+            "brand": row["brand"],
+            "unit": row["unit"],
+            "pack_size": float(row["pack_size"]),
+            "price": float(row["price"]),
+        },
+    }
 
-    try:
-        results = await perform_vehicle_search(query, k)
-        return results
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search error: {e}")
+
+async def _write_batch(
+    storage: RelationalStorage,
+    records: list[dict[str, Any]],
+) -> None:
+    for record in records:
+        record["embedding"] = await get_embedding(
+            record["title"] + "\n\n" + record["body"]
+        )
+    await storage.upsert_items(records)
 
 
 @router.post("/upload")
-async def upload_csv(file: UploadFile = File(...)) -> dict:
-    """
-    Uploads a CSV file and ingests the data into PostgreSQL in chunks.
+async def upload_csv(
+    file: UploadFile = File(...),
+    namespace: str = Query(...),
+) -> dict[str, Any]:
+    _validate_namespace(namespace)
+    storage = RelationalStorage()
+    records: list[dict[str, Any]] = []
 
-    Args:
-        file (UploadFile): CSV file uploaded by the user.
-
-    Returns:
-        dict: Result summary.
-    """
     try:
         reader = csv.DictReader(line.decode("utf-8") for line in file.file)
-        records = []
-        total_processed = 0
-
-        relational_storage = RelationalStorage()
-
         for row in reader:
-            try:
-                record = Vehicle(
-                    stock_id=int(row["stock_id"]),
-                    km=int(row["km"]),
-                    price=parse_float(row["price"]),
-                    make=row["make"],
-                    model=row["model"],
-                    year=int(row["year"]),
-                    version=row["version"],
-                    bluetooth=parse_bool(row["bluetooth"]),
-                    largo=parse_float(row["largo"]),
-                    ancho=parse_float(row["ancho"]),
-                    altura=parse_float(row["altura"]),
-                    car_play=parse_bool(row["car_play"]),
-                )
-                records.append(record.model_dump())
-            except (ValueError, KeyError) as e:
-                raise HTTPException(status_code=400, detail=f"Invalid data format: {e}")
+            records.append(_normalize_row(row, namespace))
+    except (csv.Error, KeyError, TypeError, ValueError, UnicodeDecodeError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error processing CSV file: {error}",
+        ) from error
 
-            if len(records) == 10:
-                await relational_storage.bulk_load({"records": records})
-                total_processed += len(records)
-                records = []
+    for offset in range(0, len(records), 10):
+        await _write_batch(storage, records[offset : offset + 10])
 
-        if records:
-            await relational_storage.bulk_load({"records": records})
-            total_processed += len(records)
+    return {"message": "Upload successful", "records_processed": len(records)}
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error processing CSV file: {e}")
 
-    return {"message": "Upload successful", "records_processed": total_processed}
+@router.get("/search")
+async def search_catalog(
+    namespace: str = Query(...),
+    query: str = Query(...),
+    filters: str = Query("{}"),
+    k: int = Query(5, ge=1, le=100),
+) -> list[dict[str, Any]]:
+    _validate_namespace(namespace)
+    try:
+        parsed_filters = json.loads(filters)
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="Invalid filters JSON") from error
+    if not isinstance(parsed_filters, dict):
+        raise HTTPException(status_code=400, detail="Filters must be a JSON object")
+    try:
+        filters_to_sql(namespace, parsed_filters)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    vector = await get_embedding(query)
+    return await RelationalStorage().knn_search(
+        namespace,
+        vector,
+        filters=parsed_filters,
+        k=k,
+    )
