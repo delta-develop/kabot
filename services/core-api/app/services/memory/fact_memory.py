@@ -1,13 +1,14 @@
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from app.prompts.facts import build_fact_merge_prompt
 from app.services.llm.base import LLMBase
-from app.services.memory.memory import Memory
+from app.services.memory.memory import KeyedMemory
 from app.services.storage.non_relational_storage import NonRelationalStorage
 
 
-class FactMemory(Memory):
+class FactMemory(KeyedMemory[dict]):
     """Handles long-term factual memory storage using a non-relational database and an LLM for merging.
 
     Attributes:
@@ -40,9 +41,15 @@ class FactMemory(Memory):
         )
         raw = await self.llm.generate_response([prompt])
         updated_facts = json.loads(raw)
-        await self.storage.save({"subject_id": key, "data": updated_facts})
+        await self.storage.save(
+            {
+                "subject_id": key,
+                "facts": updated_facts,
+                "last_updated": datetime.now(UTC).isoformat(),
+            }
+        )
 
-    async def retrieve_from_memory(self, key: str) -> Any:
+    async def retrieve_from_memory(self, key: str) -> dict | None:
         """Retrieves factual memory associated with the given key.
 
         Args:

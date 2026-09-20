@@ -609,17 +609,16 @@ The Cimientos track continues with **LEO-14** (dependencies), **LEO-15** (migrat
 ## 9. Verification gate
 
 Operating rule 1 requires reading command output before claiming anything. These are the
-commands, and their real status as of 2026-09-18.
+commands, and their real status as of 2026-09-20.
 
 | Check | Command | Status |
 |---|---|---|
 | Tests | `make test` | ✅ AVAILABLE — `uv run pytest tests/ -q` per service |
 | Lint | `make lint` | ✅ AVAILABLE — `black --check` + `isort --check-only`, configured in `pyproject.toml` |
-| Typecheck | `make typecheck` | ⚠️ AVAILABLE, NON-BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and reports 2 residual errors on inherited code: an LSP mismatch between `Storage.get` and `NonRelationalStorage.get`, and the unimplemented `NonRelationalStorage.bulk_load`. Each needs a real behavioral decision, not a type annotation, so they are tracked as acknowledged debt instead of forced closed |
+| Typecheck | `make typecheck` | ✅ BLOCKING — runs `uv run mypy app` per service (from inside each `services/*` directory, so mypy never sees two modules both named `app`) and is enforced in CI |
 
 **What this means in practice.** Phase 5 requires "tests, lint and typecheck green" per
-task. Tests and lint are configured gates. Typecheck is available but not a hard gate
-until the 2 residual errors above are resolved by a dedicated task.
+task. All three are configured gates.
 
 Do **not** substitute an improvised command for the missing checks. Running
 `mypy services/core-api/app/` against inherited, unconfigured code produces a large

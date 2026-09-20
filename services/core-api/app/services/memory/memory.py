@@ -1,37 +1,34 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Generic, TypeVar
+
+from app.models.turn import Turn
+
+T = TypeVar("T")
 
 
-class Memory(ABC):
-    """Abstract base class for memory storage systems."""
+class KeyedMemory(ABC, Generic[T]):
+    """Keyed access: one key stores and retrieves one value."""
 
     @abstractmethod
-    async def store_in_memory(self, key: str, data: Any) -> None:
-        """Stores data in memory associated with a specific key.
-
-        Args:
-            key (str): The key used to identify the data.
-            data (Any): The data to store.
-        """
+    async def store_in_memory(self, key: str, data: T) -> None:
         pass
 
     @abstractmethod
-    async def retrieve_from_memory(self, key: str) -> Any:
-        """Retrieves data from memory using a specific key.
-
-        Args:
-            key (str): The key used to identify the data.
-
-        Returns:
-            Any: The data associated with the key, or None if not found.
-        """
+    async def retrieve_from_memory(self, key: str) -> T | None:
         pass
 
     @abstractmethod
     async def delete_from_memory(self, key: str) -> None:
-        """Deletes data from memory associated with a specific key.
+        pass
 
-        Args:
-            key (str): The key used to identify the data to delete.
-        """
+
+class EpisodicLog(ABC):
+    """Append-only turn log with ordered history access."""
+
+    @abstractmethod
+    async def append(self, turns: list[Turn]) -> None:
+        pass
+
+    @abstractmethod
+    async def history(self, subject_id: str, limit: int | None = None) -> list[Turn]:
         pass

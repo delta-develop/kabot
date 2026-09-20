@@ -2,15 +2,15 @@
 
 # Elephant
 
-Elephant is a data ingestion and search system that stores catalog records and their
-embeddings in PostgreSQL with pgvector. It is built with FastAPI, SQLModel, and Docker.
+Elephant is a conversational backend with layered memory. It is built with FastAPI,
+SQLModel, PostgreSQL with pgvector, MongoDB, Redis, and Docker.
 
 ## Features
 
-- Upload and process CSV files via HTTP endpoint
-- Store catalog records and embeddings atomically in PostgreSQL
-- Chunked and asynchronous processing for performance
-- Uses pgvector for semantic search
+- Keep active sessions in Redis with a renewable TTL
+- Store factual and summary memory in MongoDB
+- Store embedded conversation turns in PostgreSQL with pgvector
+- Consolidate closed sessions in the background
 
 ## Getting Started
 
@@ -31,10 +31,9 @@ make up
 `core-api`, which creates its own PostgreSQL schema on startup. There is no
 separate initialization step.
 
-The pgvector schema change requires a one-time reset before its first startup.
-`docker compose down -v` deletes both named volumes, `pg_data` and `mongo_data`.
-Both volumes are intentionally disposable for this reset; catalog data is regenerated
-from the CSV files in `data/`, and existing Mongo memory data is intentionally discarded:
+Schema changes may require a local reset. `docker compose down -v` deletes the
+`pg_data` and `mongo_data` volumes. Both volumes are intentionally disposable;
+PostgreSQL turn history and MongoDB memory are discarded:
 
 ```bash
 docker compose down -v --remove-orphans
@@ -70,21 +69,11 @@ make lint
 make typecheck
 ```
 
-`make typecheck` exits non-zero: it reports 2 known errors in inherited
-`core-api` code, tracked as debt (see `AGENTS.md` §9).
-
-`POST /upload?namespace=restaurant-supplies` accepts the catalog CSV and stores each
-item together with its embedding in PostgreSQL.
-
-![alt text](image.png)
-
 Other available urls:
 
-- `GET /search` performs semantic search in one catalog namespace.
-  Example: `http://localhost:8000/search?namespace=restaurant-supplies&query=refresco`
-
 - `POST /sessions` creates a conversation for a subject.
-- `POST /sessions/{session_id}/close` consolidates and closes a conversation.
+- `GET /sessions/{session_id}` reports consolidation status and turn count.
+- `POST /sessions/{session_id}/close` schedules consolidation and returns `202`.
 
 - `GET /author` Retrieve author data
 
@@ -106,22 +95,6 @@ Other available urls:
 - `make typecheck` - Runs mypy for every service
 - `make coverage` - Runs `core-api` tests with coverage
 
-### API Endpoint
-
-- `POST /upload?namespace=restaurant-supplies` - Ingest a catalog CSV
-- `GET /search?namespace=restaurant-supplies&query=...` - Search the catalog
-
-## Notes
-
-- Catalog ingestion uses batches of 10 records.
-- Reingesting the same `(namespace, external_id)` updates the existing row.
-
----
-
-Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
-(Si lo leí, si le di permiso de que lo pusiera ahí, sería irónico crear un sistema para trabajar con LLMs sin usar un LLM ¿no creen? atentamente y con mucho respeto, Leo)
-
-
 ## Conversation Memory Use Cases
 
 Elephant incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
@@ -141,15 +114,16 @@ As the user and assistant exchange messages, each turn is stored in working memo
 - Is kept separate from factual memory and summary memory to avoid mixing signal with noise
 
 ### Contextual Expansion on Demand
-If the LLM cannot resolve a user's query due to insufficient context, the orchestrator:
-- Retrieves the full episodic history from long-term memory (MongoDB)
-- Augments the current prompt with this deep history for accurate reasoning
+In naive mode, the orchestrator retrieves the subject's complete episodic history from
+PostgreSQL and adds it to the prompt. Similarity-based recall is introduced separately.
 
 ### Conversation Closure and Consolidation
-When the session is explicitly closed, the orchestrator:
-- Persists the working memory into the episodic memory store (append-only)
+When the session is explicitly closed, the API marks it as consolidating and schedules
+background work. The worker:
+- Embeds complete user/assistant turns and appends them to PostgreSQL
 - Summarizes the recent session and merges it with the prior summary
 - Extracts any newly revealed facts and updates the factual memory accordingly
+- Clears the turns, marks the session as consolidated, and leaves its TTL running
 
 This layered approach ensures long-term retention, efficient recall, and low-token consumption during active sessions.
 
@@ -162,5 +136,5 @@ graph TD
   REDIS[Working Memory - Redis] --> CURRENT[Conversación actual]
   MONGO_FACT[Fact Memory - MongoDB] --> USER_DATA[Datos del usuario]
   MONGO_SUM[Summary Memory - MongoDB] --> SUMMARY[Resumen de conversaciones]
-  MONGO_EPISODIC[Episodic Memory - MongoDB] --> HISTORY[Historial completo]
+  POSTGRES_EPISODIC[Episodic Memory - PostgreSQL] --> HISTORY[Historial completo]
 ```

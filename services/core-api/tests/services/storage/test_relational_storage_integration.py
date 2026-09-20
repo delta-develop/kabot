@@ -1,11 +1,14 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func
-from sqlmodel import SQLModel, select
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import SQLModel
 
+from app.models.turn import Turn
 from app.services.storage import relational_storage
 from app.services.storage.relational_storage import RelationalStorage
 
@@ -16,32 +19,27 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def item(namespace, external_id, vector, **changes):
-    value = {
-        "namespace": namespace,
-        "external_id": external_id,
-        "title": "Original title",
-        "body": "Original body",
-        "attributes": {
-            "store": "integration",
-            "brand": "integration",
-            "unit": "piece",
-            "pack_size": 1,
-            "price": 10,
-        },
-        "embedding": vector,
-    }
-    value.update(changes)
-    return value
+def turn(
+    subject_id: str,
+    session_id: str,
+    seq: int,
+    ts: datetime,
+    embedding: list[float] | None = None,
+) -> Turn:
+    return Turn(
+        subject_id=subject_id,
+        session_id=session_id,
+        seq=seq,
+        ts=ts,
+        user_text=f"user {seq}",
+        assistant_text=f"assistant {seq}",
+        embedding=embedding or [1.0] + [0.0] * 1535,
+    )
 
 
 @asynccontextmanager
 async def integration_storage(monkeypatch):
-    monkeypatch.setattr(
-        relational_storage,
-        "DATABASE_URL",
-        INTEGRATION_DATABASE_URL,
-    )
+    monkeypatch.setattr(relational_storage, "DATABASE_URL", INTEGRATION_DATABASE_URL)
     storage = RelationalStorage()
     await storage.setup()
     try:
@@ -51,133 +49,66 @@ async def integration_storage(monkeypatch):
         await storage.engine.dispose()
 
 
-async def delete_items(storage, namespace, external_ids):
-    table = SQLModel.metadata.tables["catalog_item"]
-    predicate = (table.c.namespace == namespace) & table.c.external_id.in_(external_ids)
+async def delete_turns(storage: RelationalStorage, subject_id: str) -> None:
+    table = SQLModel.metadata.tables["turn"]
     assert storage.engine is not None
     async with storage.engine.begin() as connection:
-        await connection.execute(delete(table).where(predicate))
-    async with storage.engine.connect() as connection:
-        count = (
-            await connection.execute(
-                select(func.count()).select_from(table).where(predicate)
-            )
-        ).scalar_one()
-    assert count == 0
+        await connection.execute(delete(table).where(table.c.subject_id == subject_id))
 
 
 @pytest.mark.asyncio
-async def test_repeated_upsert_preserves_id_and_updates_four_columns(monkeypatch):
+async def test_turn_log_writes_vectors_orders_history_and_rejects_duplicate_seq(
+    monkeypatch,
+):
     token = uuid4().hex
-    namespace = f"integration-upsert-{token}"
-    external_id = f"integration-upsert-{token}"
-    original_vector = [1.0] + [0.0] * 1535
-    updated_vector = [0.0, 1.0] + [0.0] * 1534
+    subject_id = f"subject-{token}"
+    session_id = f"session-{token}"
+    now = datetime.now(UTC)
 
     async with integration_storage(monkeypatch) as storage:
-        table = SQLModel.metadata.tables["catalog_item"]
         try:
-            await storage.upsert_items([item(namespace, external_id, original_vector)])
-            assert storage.engine is not None
-            async with storage.engine.connect() as connection:
-                original_id = (
-                    await connection.execute(
-                        select(table.c.id).where(
-                            table.c.namespace == namespace,
-                            table.c.external_id == external_id,
-                        )
-                    )
-                ).scalar_one()
+            turns = [
+                turn(subject_id, session_id, 0, now),
+                turn(subject_id, session_id, 1, now + timedelta(seconds=1)),
+            ]
+            await storage.save_many(turns)
 
-            updated_attributes = {
-                "store": "integration",
-                "brand": "updated",
-                "unit": "box",
-                "pack_size": 2,
-                "price": 20,
-            }
-            await storage.upsert_items(
-                [
-                    item(
-                        namespace,
-                        external_id,
-                        updated_vector,
-                        title="Updated title",
-                        body="Updated body",
-                        attributes=updated_attributes,
-                    )
-                ]
-            )
+            history = await storage.history(subject_id)
 
-            async with storage.engine.connect() as connection:
-                row = (
-                    await connection.execute(
-                        select(
-                            table.c.id,
-                            table.c.title,
-                            table.c.body,
-                            table.c.attributes,
-                            table.c.embedding,
-                        ).where(
-                            table.c.namespace == namespace,
-                            table.c.external_id == external_id,
-                        )
-                    )
-                ).one()
-                count = (
-                    await connection.execute(
-                        select(func.count())
-                        .select_from(table)
-                        .where(
-                            table.c.namespace == namespace,
-                            table.c.external_id == external_id,
-                        )
-                    )
-                ).scalar_one()
-
-            assert count == 1
-            assert row.id == original_id
-            assert row.title == "Updated title"
-            assert row.body == "Updated body"
-            assert row.attributes == updated_attributes
-            assert row.embedding == updated_vector
+            assert [item.seq for item in history] == [1, 0]
+            assert len(history[0].embedding) == 1536
+            with pytest.raises(IntegrityError):
+                await storage.save_many(
+                    [turn(subject_id, session_id, 1, now + timedelta(seconds=2))]
+                )
         finally:
-            await delete_items(storage, namespace, [external_id])
+            await delete_turns(storage, subject_id)
 
 
 @pytest.mark.asyncio
-async def test_knn_orders_results_and_isolates_namespace(monkeypatch):
+async def test_knn_orders_turns_and_isolates_subject(monkeypatch):
     token = uuid4().hex
-    namespace = f"integration-knn-{token}"
-    other_namespace = f"integration-knn-other-{token}"
-    external_ids = [
-        f"integration-knn-near-{token}",
-        f"integration-knn-far-{token}",
-        f"integration-knn-other-{token}",
-    ]
+    subject_id = f"subject-{token}"
+    other_subject_id = f"other-{token}"
+    now = datetime.now(UTC)
     near = [1.0] + [0.0] * 1535
     far = [0.0, 1.0] + [0.0] * 1534
 
     async with integration_storage(monkeypatch) as storage:
         try:
-            await storage.upsert_items(
+            await storage.save_many(
                 [
-                    item(namespace, external_ids[0], near),
-                    item(namespace, external_ids[1], far),
-                    item(other_namespace, external_ids[2], near),
+                    turn(subject_id, f"session-{token}", 0, now, near),
+                    turn(subject_id, f"session-{token}", 1, now, far),
+                    turn(other_subject_id, f"other-session-{token}", 0, now, near),
                 ]
             )
 
-            results = await storage.knn_search(
-                namespace,
-                near,
-                filters={"brand": "integration"},
-                k=10,
-            )
+            results = await storage.knn_search(subject_id, near, k=10)
 
-            assert [row["external_id"] for row in results] == external_ids[:2]
-            assert all(row["namespace"] == namespace for row in results)
+            assert [row["seq"] for row in results] == [0, 1]
+            assert all(row["subject_id"] == subject_id for row in results)
             assert all("embedding" not in row for row in results)
         finally:
-            await delete_items(storage, namespace, external_ids[:2])
-            await delete_items(storage, other_namespace, external_ids[2:])
+            await delete_turns(storage, subject_id)
+            await delete_turns(storage, other_subject_id)
