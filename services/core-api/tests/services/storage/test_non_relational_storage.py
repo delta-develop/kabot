@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,11 +24,22 @@ async def test_get_mongo_client_singleton(monkeypatch):
     assert client1 is client2
 
 
+@pytest.mark.skipif(not os.getenv("MONGO_URL"), reason="MONGO_URL is not configured")
+@pytest.mark.asyncio
+async def test_real_mongo_is_reachable(monkeypatch):
+    monkeypatch.setattr(connections_module, "_mongo_client", None)
+    client = await get_mongo_client()
+
+    result = await client.admin.command("ping")
+
+    assert result["ok"] == 1
+
+
 @pytest.mark.asyncio
 async def test_non_relational_storage_invalid_collection():
     storage = NonRelationalStorage(collection_name="unknown_collection")
     with pytest.raises(ValueError, match="Invalid collection name"):
-        await storage.save({"whatsapp_id": "123", "data": "test"})
+        await storage.save({"subject_id": "123", "data": "test"})
 
 
 @pytest.mark.asyncio
@@ -62,18 +74,23 @@ async def test_save_episodic_memory_fifo_semantics(mocker):
     )
 
     storage = NonRelationalStorage(collection_name="episodic_memory")
-    messages = [
-        {"role": "user", "content": "first message"},
-        {"role": "assistant", "content": "second message"},
+    turns = [
+        {
+            "session_id": "session-a",
+            "seq": 0,
+            "ts": "2026-09-20T10:00:00Z",
+            "user_text": "first message",
+            "assistant_text": "second message",
+        },
     ]
-    await storage.save({"whatsapp_id": "user_123", "data": messages})
+    await storage.save({"subject_id": "user_123", "data": turns})
 
     mock_coll.update_one.assert_awaited_once()
     args, kwargs = mock_coll.update_one.call_args
-    assert args[0] == {"whatsapp_id": "user_123"}
+    assert args[0] == {"subject_id": "user_123"}
     update_op = args[1]
     assert "$push" in update_op
-    assert update_op["$push"] == {"history": {"$each": messages}}
+    assert update_op["$push"] == {"history": {"$each": turns}}
     assert "$set" in update_op
     assert "last_updated" in update_op["$set"]
     assert kwargs.get("upsert") is True
@@ -83,7 +100,7 @@ async def test_save_episodic_memory_fifo_semantics(mocker):
 async def test_save_episodic_memory_invalid_data_raises():
     storage = NonRelationalStorage(collection_name="episodic_memory")
     with pytest.raises(ValueError, match="EpisodicMemory expects `data` to be a list"):
-        await storage.save({"whatsapp_id": "user_123", "data": "not a list"})
+        await storage.save({"subject_id": "user_123", "data": "not a list"})
 
 
 @pytest.mark.asyncio
@@ -101,11 +118,11 @@ async def test_save_fact_memory_semantics(mocker):
 
     storage = NonRelationalStorage(collection_name="fact_memory")
     facts_data = {"name": "Alice", "preferred_brand": "Toyota"}
-    await storage.save({"whatsapp_id": "user_123", "data": facts_data})
+    await storage.save({"subject_id": "user_123", "data": facts_data})
 
     mock_coll.update_one.assert_awaited_once()
     args, kwargs = mock_coll.update_one.call_args
-    assert args[0] == {"whatsapp_id": "user_123"}
+    assert args[0] == {"subject_id": "user_123"}
     update_op = args[1]
     assert "$set" in update_op
     assert update_op["$set"]["facts"] == facts_data
@@ -128,11 +145,11 @@ async def test_save_summary_memory_semantics(mocker):
 
     storage = NonRelationalStorage(collection_name="summary_memory")
     summary_data = "User is interested in sedans."
-    await storage.save({"whatsapp_id": "user_123", "data": summary_data})
+    await storage.save({"subject_id": "user_123", "data": summary_data})
 
     mock_coll.update_one.assert_awaited_once()
     args, kwargs = mock_coll.update_one.call_args
-    assert args[0] == {"whatsapp_id": "user_123"}
+    assert args[0] == {"subject_id": "user_123"}
     update_op = args[1]
     assert "$set" in update_op
     assert update_op["$set"]["summary"] == summary_data
@@ -144,7 +161,7 @@ async def test_save_summary_memory_semantics(mocker):
 async def test_get_and_delete_operations(mocker):
     mock_coll = MagicMock()
     mock_coll.find_one = AsyncMock(
-        return_value={"whatsapp_id": "user_123", "history": []}
+        return_value={"subject_id": "user_123", "history": []}
     )
     mock_coll.delete_one = AsyncMock()
     mock_db = MagicMock()
@@ -157,14 +174,14 @@ async def test_get_and_delete_operations(mocker):
     )
 
     storage = NonRelationalStorage(collection_name="episodic_memory")
-    doc = await storage.get({"whatsapp_id": "user_123"})
-    assert doc == {"whatsapp_id": "user_123", "history": []}
+    doc = await storage.get({"subject_id": "user_123"})
+    assert doc == {"subject_id": "user_123", "history": []}
     mock_coll.find_one.assert_awaited_once_with(
-        {"whatsapp_id": "user_123"}, projection={"_id": 0}
+        {"subject_id": "user_123"}, projection={"_id": 0}
     )
 
     await storage.delete("user_123")
-    mock_coll.delete_one.assert_awaited_once_with({"whatsapp_id": "user_123"})
+    mock_coll.delete_one.assert_awaited_once_with({"subject_id": "user_123"})
 
 
 @pytest.mark.asyncio
@@ -175,8 +192,8 @@ async def test_episodic_memory_write_then_read_fifo_order(mocker):
     mock_coll = MagicMock()
 
     async def fake_update_one(filter_dict, update_doc, upsert=False):
-        key = filter_dict["whatsapp_id"]
-        doc = documents.setdefault(key, {"whatsapp_id": key, "history": []})
+        key = filter_dict["subject_id"]
+        doc = documents.setdefault(key, {"subject_id": key, "history": []})
         if "$push" in update_doc and "history" in update_doc["$push"]:
             each_messages = update_doc["$push"]["history"]["$each"]
             doc["history"].extend(each_messages)
@@ -185,7 +202,7 @@ async def test_episodic_memory_write_then_read_fifo_order(mocker):
                 doc[k] = v
 
     async def fake_find_one(filter_dict, projection=None):
-        key = filter_dict["whatsapp_id"]
+        key = filter_dict["subject_id"]
         if key not in documents:
             return None
         doc = dict(documents[key])
@@ -207,21 +224,17 @@ async def test_episodic_memory_write_then_read_fifo_order(mocker):
     storage = NonRelationalStorage(collection_name="episodic_memory")
 
     # First write batch
-    batch1 = [
-        {"role": "user", "content": "Msg 1"},
-        {"role": "assistant", "content": "Msg 2"},
-    ]
-    await storage.save({"whatsapp_id": "user_fifo", "data": batch1})
+    batch1 = [{"session_id": "session-a", "seq": 0, "user_text": "Msg 1"}]
+    await storage.save({"subject_id": "user_fifo", "data": batch1})
 
     # Second write batch
-    batch2 = [{"role": "user", "content": "Msg 3"}]
-    await storage.save({"whatsapp_id": "user_fifo", "data": batch2})
+    batch2 = [{"session_id": "session-b", "seq": 0, "user_text": "Msg 3"}]
+    await storage.save({"subject_id": "user_fifo", "data": batch2})
 
     # Read back and check order
-    result = await storage.get({"whatsapp_id": "user_fifo"})
+    result = await storage.get({"subject_id": "user_fifo"})
     assert result is not None
     assert result["history"] == [
-        {"role": "user", "content": "Msg 1"},
-        {"role": "assistant", "content": "Msg 2"},
-        {"role": "user", "content": "Msg 3"},
+        {"session_id": "session-a", "seq": 0, "user_text": "Msg 1"},
+        {"session_id": "session-b", "seq": 0, "user_text": "Msg 3"},
     ]

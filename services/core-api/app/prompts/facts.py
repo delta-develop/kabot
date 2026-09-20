@@ -1,16 +1,21 @@
-async def build_fact_merge_prompt(recent_messages: list, previous_facts: dict) -> dict:
-    """
-    Construye un prompt para actualizar o fusionar hechos relevantes sobre el usuario basándose en su historial de conversación reciente.
+from app.models.session import TurnDraft
+
+
+async def build_fact_merge_prompt(
+    recent_messages: list[TurnDraft], previous_facts: dict
+) -> dict:
+    """Builds a prompt that merges facts from recent conversation turns.
 
     Args:
-        recent_messages (list): Lista de mensajes recientes en formato {'role': ..., 'content': ...}.
-        previous_facts (dict): Diccionario con los hechos previamente almacenados del usuario.
+        recent_messages: Complete recent user and assistant turns.
+        previous_facts: Previously stored facts about the subject.
 
     Returns:
-        dict: Un diccionario con el rol 'system' y el contenido del prompt construido.
+        A system prompt for fact extraction and merging.
     """
     formatted_history = "\n".join(
-        f"{m['role']}: {m['content']}" for m in recent_messages
+        f"user: {turn.user_text}\nassistant: {turn.assistant_text}"
+        for turn in recent_messages
     )
     formatted_facts = ", ".join(f"{k}: {v}" for k, v in previous_facts.items())
 

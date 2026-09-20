@@ -16,5 +16,5 @@ async def get_author():
         "name": "Leonardo HG",
         "location": "Ciudad de México",
         "role": "Backend Developer",
-        "project": "Tech Challenge - Kabot",
+        "project": "Elephant",
     }

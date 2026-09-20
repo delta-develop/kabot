@@ -15,18 +15,18 @@ class SummaryMemory(Memory):
         self.llm = llm
 
     async def store_in_memory(self, key: str, data: Any) -> None:
-        """Stores a merged summary in memory for a given user key.
+        """Stores a merged summary for a subject.
 
         Args:
-            key: The user identifier (e.g. WhatsApp ID).
-            data: The recent conversation messages to summarize.
+            key: The subject identifier.
+            data: The recent conversation turns to summarize.
         """
         old_summary = await self.retrieve_from_memory(key)
         prompt = await build_summary_merge_prompt(
             recent_messages=data, previous_summary=old_summary or ""
         )
         merged_summary = await self.llm.generate_response([prompt])
-        await self.storage.save({"whatsapp_id": key, "data": merged_summary})
+        await self.storage.save({"subject_id": key, "data": merged_summary})
 
     async def retrieve_from_memory(self, key: str) -> Any:
         """Retrieves the summarized memory for a given user key.
@@ -37,7 +37,7 @@ class SummaryMemory(Memory):
         Returns:
             The summary string if found, otherwise None.
         """
-        doc = await self.storage.get({"whatsapp_id": key})
+        doc = await self.storage.get({"subject_id": key})
         return doc.get("summary") if doc else None
 
     async def delete_from_memory(self, key: str) -> None:

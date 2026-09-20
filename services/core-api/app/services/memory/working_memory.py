@@ -1,8 +1,11 @@
-import json
+import os
 from typing import Any
 
+from app.models.session import SessionDocument
 from app.services.memory.memory import Memory
 from app.services.storage.cache_storage import CacheStorage
+
+SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "1800"))
 
 
 class WorkingMemory(Memory):
@@ -10,25 +13,19 @@ class WorkingMemory(Memory):
 
     def __init__(self):
         """Initializes the WorkingMemory with a CacheStorage instance."""
-        self.storage = CacheStorage()
+        self.storage = CacheStorage(namespace="session")
 
     async def store_in_memory(self, key: str, data: Any) -> None:
-        """Stores data in memory, appending to any existing list.
+        """Stores a complete session document with a renewed TTL.
 
         Args:
             key (str): The key under which to store the data.
-            data (Any): The data to be stored. Must not be a pre-serialized string.
+            data (Any): The session document to store.
         """
-        if isinstance(data, str):
-            raise ValueError("Data should not be a pre-serialized string.")
-        existing_data = await self.retrieve_from_memory(key)
-        if not isinstance(existing_data, list):
-            existing_data = []
-        if isinstance(data, list):
-            existing_data.extend(data)
-        else:
-            existing_data.append(data)
-        await self.storage.set(key, existing_data)
+        session = SessionDocument.model_validate(data)
+        await self.storage.set(
+            key, session.model_dump(mode="json"), ttl=SESSION_TTL_SECONDS
+        )
 
     async def retrieve_from_memory(self, key: str) -> Any:
         """Retrieves and deserializes data from memory by key.
@@ -42,9 +39,7 @@ class WorkingMemory(Memory):
         raw = await self.storage.get(key)
         if raw is None:
             return None
-        if isinstance(raw, (list, dict)):
-            return raw
-        return json.loads(raw)
+        return SessionDocument.model_validate(raw)
 
     async def delete_from_memory(self, key: str) -> None:
         """Deletes data from memory by key.

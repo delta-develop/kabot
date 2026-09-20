@@ -4,8 +4,8 @@ import dotenv
 import logfire
 from fastapi import FastAPI
 
-from app.api.routes.memory import router as memory_router
 from app.api.routes.meta import router as meta_router
+from app.api.routes.sessions import router as sessions_router
 from app.services.storage.relational_storage import RelationalStorage
 
 dotenv.load_dotenv()
@@ -28,5 +28,5 @@ logfire.instrument_asyncpg()
 logfire.instrument_redis()
 logfire.instrument_pymongo()
 
-app.include_router(memory_router)
 app.include_router(meta_router)
+app.include_router(sessions_router)

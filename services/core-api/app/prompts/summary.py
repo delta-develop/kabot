@@ -1,5 +1,8 @@
+from app.models.session import TurnDraft
+
+
 async def build_summary_merge_prompt(
-    recent_messages: list, previous_summary: str
+    recent_messages: list[TurnDraft], previous_summary: str
 ) -> dict:
     """
     Construye un prompt para que el LLM genere o fusione un resumen conversacional.
@@ -18,7 +21,8 @@ async def build_summary_merge_prompt(
         }
 
     formatted_history = "\n".join(
-        f"{m['role']}: {m['content']}" for m in recent_messages
+        f"user: {turn.user_text}\nassistant: {turn.assistant_text}"
+        for turn in recent_messages
     )
 
     if not previous_summary:

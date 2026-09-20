@@ -1,14 +1,13 @@
-from typing import Any, List
-
+from app.models.session import TurnDraft
 from app.services.memory.memory import Memory
 from app.services.storage.non_relational_storage import NonRelationalStorage
 
 
 class EpisodicMemory(Memory):
-    """Manages episodic memory storage and retrieval for user sessions.
+    """Manages episodic memory storage and retrieval for subjects.
 
     This class provides methods to store, retrieve, and delete episodic memory data
-    associated with a unique user key, typically a session identifier such as a WhatsApp ID.
+    associated with a subject.
     """
 
     def __init__(self):
@@ -22,27 +21,31 @@ class EpisodicMemory(Memory):
         """Stores episodic memory data for a specified user key.
 
         Args:
-            key (str): Unique identifier for the user's session (e.g., WhatsApp ID).
+            key (str): Unique identifier for the subject.
             data: The memory data to be stored.
         """
-        await self.storage.save({"whatsapp_id": key, "data": data})
+        await self.storage.save({"subject_id": key, "data": data})
 
-    async def retrieve_from_memory(self, key: str) -> List[Any]:
+    async def retrieve_from_memory(self, key: str) -> list[TurnDraft]:
         """Retrieves episodic memory history for the specified user key.
 
         Args:
-            key (str): Unique identifier for the user's session.
+            key (str): Unique identifier for the subject.
 
         Returns:
-            List[Any]: A list representing the memory history if found; otherwise, an empty list.
+            list[TurnDraft]: The subject's history, or an empty list.
         """
-        doc = await self.storage.get({"whatsapp_id": key})
-        return doc.get("history", []) if doc else []
+        doc = await self.storage.get({"subject_id": key})
+        return (
+            [TurnDraft.model_validate(turn) for turn in doc.get("history", [])]
+            if doc
+            else []
+        )
 
     async def delete_from_memory(self, key: str) -> None:
         """Deletes episodic memory associated with the specified user key.
 
         Args:
-            key (str): Unique identifier for the user's session.
+            key (str): Unique identifier for the subject.
         """
         await self.storage.delete(key)

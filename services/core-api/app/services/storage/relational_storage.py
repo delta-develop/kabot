@@ -17,7 +17,7 @@ from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
     "DB_ASYNC_CONNECTION_STR",
-    "postgresql+asyncpg://kabot:kabot123@postgres:5432/elephant",
+    "postgresql+asyncpg://elephant:elephant123@postgres:5432/elephant",
 )
 
 engine: AsyncEngine | None = None
