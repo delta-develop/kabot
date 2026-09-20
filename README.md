@@ -152,15 +152,6 @@ This layered approach ensures long-term retention, efficient recall, and low-tok
 
 
 
-## 📚 Used prompts
-
-```mermaid
-graph TD
-  P1[CONVERSATION_PROMPT] --> Genera_respuesta
-  P2[FACT_EXTRACTION_PROMPT] --> Extrae_hechos
-  P3[SUMMARY_PROMPT] --> Resume_conversación
-```
-
 ## 🧠 Agent Memory
 
 ```mermaid
