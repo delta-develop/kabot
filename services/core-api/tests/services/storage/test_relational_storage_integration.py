@@ -75,7 +75,7 @@ async def test_turn_log_writes_vectors_orders_history_and_rejects_duplicate_seq(
 
             history = await storage.history(subject_id)
 
-            assert [item.seq for item in history] == [1, 0]
+            assert [item.seq for item in history] == [0, 1]
             assert len(history[0].embedding) == 1536
             with pytest.raises(IntegrityError):
                 await storage.save_many(
@@ -86,29 +86,64 @@ async def test_turn_log_writes_vectors_orders_history_and_rejects_duplicate_seq(
 
 
 @pytest.mark.asyncio
-async def test_knn_orders_turns_and_isolates_subject(monkeypatch):
+async def test_associative_recall_returns_past_hit_neighbors_and_excludes_current_session(
+    monkeypatch,
+):
     token = uuid4().hex
     subject_id = f"subject-{token}"
-    other_subject_id = f"other-{token}"
+    past_session_id = f"past-{token}"
+    current_session_id = f"current-{token}"
     now = datetime.now(UTC)
-    near = [1.0] + [0.0] * 1535
-    far = [0.0, 1.0] + [0.0] * 1534
+    query = [1.0] + [0.0] * 1535
+    unrelated_a = [0.0, 1.0] + [0.0] * 1534
+    unrelated_b = [0.0, 0.0, 1.0] + [0.0] * 1533
+    monkeypatch.setattr(relational_storage, "RECALL_WINDOW", 1)
+    monkeypatch.setattr(relational_storage, "RECALL_MIN_SIMILARITY", -1.0)
 
     async with integration_storage(monkeypatch) as storage:
         try:
             await storage.save_many(
                 [
-                    turn(subject_id, f"session-{token}", 0, now, near),
-                    turn(subject_id, f"session-{token}", 1, now, far),
-                    turn(other_subject_id, f"other-session-{token}", 0, now, near),
+                    turn(subject_id, past_session_id, 13, now, unrelated_a),
+                    turn(
+                        subject_id,
+                        past_session_id,
+                        14,
+                        now + timedelta(seconds=1),
+                        query,
+                    ),
+                    turn(
+                        subject_id,
+                        past_session_id,
+                        15,
+                        now + timedelta(seconds=2),
+                        unrelated_b,
+                    ),
+                    turn(
+                        subject_id,
+                        current_session_id,
+                        0,
+                        now + timedelta(seconds=3),
+                        query,
+                    ),
                 ]
             )
 
-            results = await storage.knn_search(subject_id, near, k=10)
+            assert await storage.has_turns(subject_id) is True
+            assert await storage.has_turns(f"missing-{token}") is False
+            fragments = await storage.similar(
+                subject_id,
+                query,
+                k=1,
+                exclude_session=current_session_id,
+            )
 
-            assert [row["seq"] for row in results] == [0, 1]
-            assert all(row["subject_id"] == subject_id for row in results)
-            assert all("embedding" not in row for row in results)
+            assert len(fragments) == 1
+            assert fragments[0].session_id == past_session_id
+            assert [item.seq for item in fragments[0].turns] == [13, 14, 15]
+            assert all(item.subject_id == subject_id for item in fragments[0].turns)
+            assert all(
+                item.session_id != current_session_id for item in fragments[0].turns
+            )
         finally:
             await delete_turns(storage, subject_id)
-            await delete_turns(storage, other_subject_id)

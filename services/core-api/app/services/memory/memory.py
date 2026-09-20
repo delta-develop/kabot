@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-from app.models.turn import Turn
+from app.models.turn import Fragment, Turn
 
 T = TypeVar("T")
 
@@ -31,4 +31,18 @@ class EpisodicLog(ABC):
 
     @abstractmethod
     async def history(self, subject_id: str, limit: int | None = None) -> list[Turn]:
+        pass
+
+    @abstractmethod
+    async def has_turns(self, subject_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    async def similar(
+        self,
+        subject_id: str,
+        vector: list[float],
+        k: int,
+        exclude_session: str | None = None,
+    ) -> list[Fragment]:
         pass

@@ -43,3 +43,28 @@ async def test_history_returns_subject_turns(mock_storage_cls):
 
     assert result == turns
     storage.history.assert_awaited_once_with("leo", 2)
+
+
+@pytest.mark.asyncio
+@patch("app.services.memory.episodic_memory.RelationalStorage")
+async def test_has_turns_delegates_to_storage(mock_storage_cls):
+    storage = AsyncMock()
+    storage.has_turns.return_value = True
+    mock_storage_cls.return_value = storage
+
+    assert await EpisodicMemory().has_turns("leo") is True
+    storage.has_turns.assert_awaited_once_with("leo")
+
+
+@pytest.mark.asyncio
+@patch("app.services.memory.episodic_memory.RelationalStorage")
+async def test_similar_delegates_to_storage(mock_storage_cls):
+    storage = AsyncMock()
+    storage.similar.return_value = []
+    mock_storage_cls.return_value = storage
+    vector = [0.0] * 1536
+
+    result = await EpisodicMemory().similar("leo", vector, 5, exclude_session="current")
+
+    assert result == []
+    storage.similar.assert_awaited_once_with("leo", vector, 5, "current")
