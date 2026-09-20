@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import VECTOR
+from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlmodel import Field, SQLModel
@@ -44,3 +45,12 @@ class Turn(SQLModel, table=True):
     embedding: list[float] = Field(
         sa_column=Column(VECTOR(1536), nullable=False),
     )
+
+
+class Fragment(BaseModel):
+    """A similarity hit with its neighboring turns."""
+
+    turns: list[Turn]
+    session_id: str
+    ts: datetime
+    similarity: float

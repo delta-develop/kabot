@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import exists, text, tuple_
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,13 +11,15 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, select
 
-from app.models.turn import Turn
+from app.models.turn import Fragment, Turn
 from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
     "DB_ASYNC_CONNECTION_STR",
     "postgresql+asyncpg://elephant:elephant123@postgres:5432/elephant",
 )
+RECALL_MIN_SIMILARITY = float(os.getenv("RECALL_MIN_SIMILARITY", "-1.0"))
+RECALL_WINDOW = int(os.getenv("RECALL_WINDOW", "1"))
 
 engine: AsyncEngine | None = None
 AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
@@ -92,42 +94,120 @@ class RelationalStorage(Storage):
             result = await session.execute(statement)
             return list(result.scalars().all())
 
-    async def knn_search(
-        self, subject_id: str, vector: list[float], k: int = 5
-    ) -> list[dict[str, Any]]:
+    async def has_turns(self, subject_id: str) -> bool:
+        columns = SQLModel.metadata.tables["turn"].c
+        statement = select(exists().where(columns.subject_id == subject_id))
+        async with self._sessions()() as session:
+            result = await session.execute(statement)
+            return bool(result.scalar())
+
+    async def similar(
+        self,
+        subject_id: str,
+        vector: list[float],
+        k: int,
+        exclude_session: str | None = None,
+    ) -> list[Fragment]:
         if not isinstance(k, int) or not 1 <= k <= 100:
             raise ValueError("k must be between 1 and 100")
+        if RECALL_WINDOW < 0:
+            raise ValueError("RECALL_WINDOW must be zero or greater")
 
         columns = SQLModel.metadata.tables["turn"].c
         distance = columns.embedding.cosine_distance(vector).label("distance")
-        selected_columns = [
-            columns.id,
-            columns.subject_id,
-            columns.session_id,
-            columns.seq,
-            columns.ts,
-            columns.user_text,
-            columns.assistant_text,
-            distance,
-        ]
         statement = (
-            select(*selected_columns)
+            select(columns.session_id, columns.seq, distance)
             .where(columns.subject_id == subject_id)
             .order_by(distance.asc())
             .limit(k)
         )
+        if exclude_session is not None:
+            statement = statement.where(columns.session_id != exclude_session)
+
         async with self._sessions()() as session:
-            result = await session.execute(statement)
-        return [
-            {
-                "id": str(row["id"]),
-                "subject_id": row["subject_id"],
-                "session_id": row["session_id"],
-                "seq": row["seq"],
-                "ts": row["ts"],
-                "user_text": row["user_text"],
-                "assistant_text": row["assistant_text"],
-                "distance": float(row["distance"]),
-            }
-            for row in result.mappings().all()
-        ]
+            async with session.begin():
+                # The subject filter can otherwise exhaust HNSW candidates early.
+                await session.execute(
+                    text("SET LOCAL hnsw.iterative_scan = relaxed_order")
+                )
+                result = await session.execute(statement)
+                hits = [
+                    {
+                        "session_id": row["session_id"],
+                        "seq": row["seq"],
+                        "similarity": 1 - float(row["distance"]),
+                    }
+                    for row in result.mappings().all()
+                    if 1 - float(row["distance"]) >= RECALL_MIN_SIMILARITY
+                ]
+                if not hits:
+                    return []
+
+                windows: list[dict[str, Any]] = []
+                for hit in sorted(
+                    hits, key=lambda item: (item["session_id"], item["seq"])
+                ):
+                    start = hit["seq"] - RECALL_WINDOW
+                    end = hit["seq"] + RECALL_WINDOW
+                    if (
+                        windows
+                        and windows[-1]["session_id"] == hit["session_id"]
+                        and start <= windows[-1]["end"]
+                    ):
+                        windows[-1]["end"] = max(windows[-1]["end"], end)
+                        windows[-1]["similarity"] = max(
+                            windows[-1]["similarity"], hit["similarity"]
+                        )
+                    else:
+                        windows.append(
+                            {
+                                "session_id": hit["session_id"],
+                                "start": start,
+                                "end": end,
+                                "similarity": hit["similarity"],
+                            }
+                        )
+
+                pairs = [
+                    (window["session_id"], seq)
+                    for window in windows
+                    for seq in range(window["start"], window["end"] + 1)
+                ]
+                neighbors = await session.execute(
+                    select(Turn).where(
+                        columns.subject_id == subject_id,
+                        tuple_(columns.session_id, columns.seq).in_(pairs),
+                    )
+                )
+
+        turns_by_session: dict[str, list[Turn]] = {}
+        for turn in neighbors.scalars().all():
+            turns_by_session.setdefault(turn.session_id, []).append(turn)
+
+        fragments = []
+        for window in windows:
+            turns = sorted(
+                (
+                    turn
+                    for turn in turns_by_session[window["session_id"]]
+                    if window["start"] <= turn.seq <= window["end"]
+                ),
+                key=lambda turn: turn.seq,
+            )
+            fragments.append(
+                Fragment(
+                    turns=turns,
+                    session_id=window["session_id"],
+                    ts=turns[0].ts,
+                    similarity=window["similarity"],
+                )
+            )
+        return sorted(
+            fragments,
+            key=lambda fragment: (
+                -fragment.similarity,
+                fragment.ts,
+                fragment.session_id,
+                fragment.turns[0].seq,
+            ),
+        )
