@@ -156,12 +156,9 @@ This layered approach ensures long-term retention, efficient recall, and low-tok
 
 ```mermaid
 graph TD
-  P1[INTENTION_PROMPT] --> Detecta_intención
-  P2[FILTER_EXTRACTION_PROMPT] --> Extrae_filtros_JSON
-  P3[VEHICLE_SUMMARIZATION_PROMPT] --> Resume_autos
-  P4[FINANCE_PROMPT] --> Estima_mensualidades
-  P5[KAVAK_INFO_PROMPT] --> Responde_dudas_generales
-  P6[EXIT_PROMPT] --> Cierre_conversación
+  P1[CONVERSATION_PROMPT] --> Genera_respuesta
+  P2[FACT_EXTRACTION_PROMPT] --> Extrae_hechos
+  P3[SUMMARY_PROMPT] --> Resume_conversación
 ```
 
 ## 🧠 Agent Memory
