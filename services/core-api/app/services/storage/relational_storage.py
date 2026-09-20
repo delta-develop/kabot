@@ -13,7 +13,6 @@ from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel, select
 
 from app.models.catalog_item import CatalogItem
-from app.services.search.filters import filters_to_sql
 from app.services.storage.base import Storage
 
 DATABASE_URL = os.getenv(
@@ -114,10 +113,7 @@ class RelationalStorage(Storage):
         ]
         statement = (
             select(*selected_columns)
-            .where(
-                columns.namespace == namespace,
-                filters_to_sql(namespace, filters or {}),
-            )
+            .where(columns.namespace == namespace)
             .order_by(distance.asc())
             .limit(k)
         )

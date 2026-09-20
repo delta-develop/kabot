@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import delete, func
 from sqlmodel import SQLModel, select
 
-from app.services.search.filters import FILTER_SCHEMAS
 from app.services.storage import relational_storage
 from app.services.storage.relational_storage import RelationalStorage
 
@@ -158,11 +157,6 @@ async def test_knn_orders_results_and_isolates_namespace(monkeypatch):
     ]
     near = [1.0] + [0.0] * 1535
     far = [0.0, 1.0] + [0.0] * 1534
-    monkeypatch.setitem(
-        FILTER_SCHEMAS,
-        namespace,
-        FILTER_SCHEMAS["restaurant-supplies"],
-    )
 
     async with integration_storage(monkeypatch) as storage:
         try:
