@@ -1,4 +1,4 @@
-# Makefile to manage the Kabot project with Docker Compose
+# Makefile to manage the Elephant project with Docker Compose
 
 # Variables
 # Reads CORE_API_PORT from .env so open-api targets the port this workspace
@@ -87,7 +87,7 @@ shell: .env
 	docker compose exec core-api /bin/bash
 
 psql: .env
-	docker compose exec postgres psql -U kabot -d elephant
+	docker compose exec postgres psql -U elephant -d elephant
 
 rebuild-app: .env
 	docker compose build core-api

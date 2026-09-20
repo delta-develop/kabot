@@ -1,5 +1,5 @@
 [project]
-name = "kabot"
+name = "elephant"
 version = "0.1.0"
 description = "Elephant — B2B multi-store marketplace backend"
 requires-python = ">=3.14,<3.15"

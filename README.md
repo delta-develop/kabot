@@ -1,8 +1,8 @@
 
 
-# KABOT
+# Elephant
 
-Kabot is a data ingestion and search system that stores catalog records and their
+Elephant is a data ingestion and search system that stores catalog records and their
 embeddings in PostgreSQL with pgvector. It is built with FastAPI, SQLModel, and Docker.
 
 ## Features
@@ -56,7 +56,7 @@ from a reserved block, so several workspaces run side by side:
 To start a single service: `docker compose up -d --wait memory`.
 
 > **Orphaned containers from before the compose project name was pinned:** if you
-> ran this stack before `docker-compose.yml` started setting `name: kabot-${PORT_BASE:-8000}`,
+> ran this stack before `docker-compose.yml` started setting `name: elephant-${PORT_BASE:-8000}`,
 > your old containers and volumes live under the previous implicit project name (the
 > worktree's directory name), and `docker compose down -v` here will not remove them.
 > No data is lost, but they linger. List and remove them with:
@@ -123,7 +123,7 @@ Built with 💻 and lots of coffee ☕️ by Leonardo and ChatGPT.
 
 ## Conversation Memory Use Cases
 
-Kabot incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
+Elephant incorporates a multi-layered memory system inspired by human cognition, enabling rich and context-aware interactions. These are the main use cases supported by the `CognitiveOrchestrator`:
 
 ### Initial Conversation Bootstrapping
 When a user starts a new conversation, the system retrieves and loads:

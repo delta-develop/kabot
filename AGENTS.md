@@ -547,7 +547,7 @@ tools perform the same phase by following §6.7 directly.
 ## 8. Stack and services
 
 **Project:** Elephant — a B2B multi-store marketplace backend operated by a conversational
-agent with layered memory. It is built by repurposing the inherited `kabot` repository and
+agent with layered memory. It is built by repurposing the inherited repository and
 retiring its original car-sales domain.
 
 **In scope:** catalog, hybrid search, multi-store orders, inventory.

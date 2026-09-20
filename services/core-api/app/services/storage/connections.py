@@ -22,7 +22,7 @@ async def get_redis_client(redis_url="redis://redis:6379"):
     return _redis_client
 
 
-async def get_mongo_client(mongo_url="mongodb://mongo:27017/kabot"):
+async def get_mongo_client(mongo_url="mongodb://mongo:27017/elephant"):
     """Initialize and return a singleton MongoDB client.
 
     Args:

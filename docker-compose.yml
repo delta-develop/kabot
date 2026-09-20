@@ -1,7 +1,7 @@
 # Named per workspace so two worktrees never share containers or the
 # mongo_data/pg_data volumes; PORT_BASE is unique per workspace (see
 # .superset/ports.sh) and is the isolation key, not just the published ports.
-name: kabot-${PORT_BASE:-8000}
+name: elephant-${PORT_BASE:-8000}
 
 services:
   core-api:
@@ -71,15 +71,15 @@ services:
   postgres:
     image: pgvector/pgvector:pg15
     environment:
-      POSTGRES_USER: kabot
-      POSTGRES_PASSWORD: kabot123
+      POSTGRES_USER: elephant
+      POSTGRES_PASSWORD: elephant123
       POSTGRES_DB: elephant
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kabot -d elephant"]
+      test: ["CMD-SHELL", "pg_isready -U elephant -d elephant"]
       interval: 5s
       timeout: 5s
       retries: 12
