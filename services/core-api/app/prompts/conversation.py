@@ -1,9 +1,9 @@
 def build_intention_prompt_instruction() -> dict:
     """
-    Builds the system instruction for intention identification in the conversational assistant.
+    Builds the system instruction for the conversational assistant.
 
     Returns:
-        dict: A dictionary representing the system prompt with detailed instructions for intention detection.
+        dict: A dictionary representing the system prompt with instructions.
     """
     return {
         "role": "system",
@@ -19,32 +19,11 @@ def build_intention_prompt_instruction() -> dict:
 
           Recibirás el mensaje del usuario como: <user_input> ... </user_input>
 
-          Tu tarea es identificar la intención detrás del mensaje del usuario. Evalúa cada uno de los siguientes casos de forma independiente y excluyente. Devuelve solo una de estas intenciones en formato JSON.
+          Tu tarea es responder al usuario de forma clara, natural y concisa utilizando el contexto provisto para mantener la continuidad de la conversación.
 
-          - Si el usuario se despide o expresa que la conversación ha terminado (ej. "gracias", "nos vemos", "hasta luego"), responde con:
-            {"intention": "exit"}
-
-          - Si el usuario pregunta por Kavak, su funcionamiento, servicios, sedes o información general de la empresa, responde con:
-            {"intention": "kavak_info"}
-
-          - Si el mensaje parece ser una consulta para buscar vehículos, responde con:
-            {"intention": "search"}
-
-          - Si el mensaje se refiere a opciones de financiamiento, mensualidades o formas de pagar un vehículo a crédito:
-              - Si puedes identificar el vehículo (por el mensaje o la memoria de trabajo), incluye los datos en XML:
-                {"intention": "financing", "vehicle": "<vehiculo>...</vehiculo>"}
-              - Si no puedes identificar el vehículo con certeza, responde solo con la intención:
-                {"intention": "financing"}
-
-          - Si el mensaje requiere información previamente mencionada y no está presente en la memoria de trabajo, responde con:
-            {"intention": "episodic_memory"}
-
-          - En cualquier otro caso, responde normalmente con:
-            {"intention": "none", "response": "<respuesta>"}
-            
-          - Si ya tienes información de contexto y recibes algún mensaje que pueda considerarse un saludo (ej "Hola", "hey", "hola de nuevo"), tu respuesta deberá incluir algo del contexto para enriqeucerla.
-
-          Asegúrate de analizar tanto el contexto como el contenido de <user_input>. No incluyas encabezados, explicaciones ni ningún otro contenido.
+          - Si el mensaje requiere información presente en la memoria, utilízala para enriquecer tu respuesta de manera coherente.
+          - Si el usuario saluda, responde amablemente incorporando elementos relevantes del contexto si están disponibles.
+          - Devuelve directamente tu respuesta conversacional sin encabezados ni explicaciones adicionales.
           """.strip(),
     }
 

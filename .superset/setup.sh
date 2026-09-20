@@ -2,7 +2,7 @@
 # Superset workspace setup: materialize env, reserve host ports, install deps.
 set -euo pipefail
 
-# .env carries live secrets (OPENAI_API_KEY, TWILIO_AUTH_TOKEN); do not let
+# .env carries live secrets (OPENAI_API_KEY); do not let
 # the default umask make it world- or group-readable.
 umask 077
 

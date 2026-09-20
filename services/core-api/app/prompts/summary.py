@@ -93,10 +93,10 @@ async def generate_summary_prompt(history: list) -> dict:
             Muy importante:
             - NO asumas que una sugerencia hecha por el asistente fue aceptada por el usuario a menos que haya una afirmación explícita (por ejemplo, "me interesa", "quiero ese", "me gusta", etc.)
             - Ignora información que fue solamente propuesta por el asistente y no confirmada por el usuario.
-            - No incluyas intereses, marcas o modelos si el usuario no los mencionó directamente y de manera positiva.
-            - También incluye rechazos explícitos del usuario hacia ciertas marcas, modelos, tipos de auto o características, si existen.
-            - Si el usuario expresó desinterés o rechazo por alguna marca o modelo (como Toyota o híbridos), nunca lo menciones como recomendación.
-            - Si no estás completamente seguro del interés actual del usuario en un modelo específico, omite mencionarlo. Opta por una despedida general y cálida.
+            - No incluyas intereses o preferencias si el usuario no los mencionó directamente y de manera positiva.
+            - También incluye rechazos explícitos del usuario hacia ciertos temas, preferencias o características, si existen.
+            - Si el usuario expresó desinterés o rechazo por algún elemento, no lo menciones como recomendación.
+            - Si no estás completamente seguro del interés actual del usuario en un tema específico, omite mencionarlo.
 
             Devuelve únicamente el texto del resumen. No incluyas encabezados ni explicaciones.
 
@@ -112,37 +112,3 @@ CONTEXT_PROMPT = {
     "content": "Lo siguiente es el contexto de la conversación. No debes responder a nada de esto, "
     "sólo te sirve como memoria de trabajo para entender al usuario:",
 }
-
-
-async def summarize_vehicle_results(results: list) -> str:
-    """
-    Genera un resumen natural y amigable de una lista de vehículos encontrados.
-
-    Args:
-        results (list): Lista de resultados de búsqueda de autos.
-
-    Returns:
-        str: Prompt formateado con los resultados listos para el LLM.
-    """
-    import json
-
-    formatted_results = json.dumps(results, indent=2, ensure_ascii=False)
-    prompt = VEHICLE_SUMMARIZATION_PROMPT.format(results=formatted_results)
-    return prompt
-
-
-VEHICLE_SUMMARIZATION_PROMPT = """
-    A continuación tienes una lista de vehículos que coinciden con los intereses del usuario.
-
-    Tu tarea es generar un mensaje en lenguaje natural que resuma los resultados de forma clara y amigable. Incluye lo siguiente:
-    - El número de coincidencias encontradas
-    - Una breve descripción de los modelos más destacados (máximo 3)
-    - Destacar si tienen características importantes como CarPlay o Bluetooth
-    - Mencionar el rango de precios y años si hay variedad
-    - Usar un tono cordial y útil, como si fueras un asesor
-
-    Resultados:
-    {results}
-
-    Responde únicamente con el mensaje dirigido al usuario. No expliques tu razonamiento.
-    """.strip()

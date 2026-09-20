@@ -87,7 +87,7 @@ shell: .env
 	docker compose exec core-api /bin/bash
 
 psql: .env
-	docker compose exec postgres psql -U kabot -d kavak
+	docker compose exec postgres psql -U kabot -d elephant
 
 rebuild-app: .env
 	docker compose build core-api

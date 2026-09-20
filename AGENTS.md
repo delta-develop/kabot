@@ -575,7 +575,7 @@ services/
 ├── core-api/
 │   ├── app/
 │   │   ├── main.py          # FastAPI composition root
-│   │   ├── api/routes/      # vehicles · whatsapp · memory · meta
+│   │   ├── api/routes/      # memory · meta
 │   │   ├── models/
 │   │   ├── prompts/
 │   │   ├── services/
