@@ -87,11 +87,6 @@ Other available urls:
 
 - `GET /author` Retrieve author data
 
-- `POST /webhook/whatsapp` You can manually simulate the receive of a message, this is a `x-www-form-urlencoded` so it will require fields:
-- `From` with format `whatsapp:+5215578771322`
-- `Body` with the message
-- `Sandbox` By sending `true` you will only see response in Postman but not in whatsapp.
-
 
 
 ### Useful Makefile Commands
