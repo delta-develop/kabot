@@ -1,31 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any
 
 
 class Storage(ABC):
     @abstractmethod
-    async def save(self, data: Dict[str, Any]) -> None:
+    async def save(self, data: dict[str, Any]) -> None:
         """Asynchronously save a single item to the storage backend.
 
         Args:
             data (Dict[str, Any]): The data to store.
-        """
-        pass
-
-    @abstractmethod
-    async def get(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Asynchronously get records from the storage using filter criteria."""
-        pass
-
-    @abstractmethod
-    async def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
-        """Asynchronously load multiple records into the storage backend.
-
-        Args:
-            data (Dict): The data to be bulk uploaded.
-
-        Returns:
-            List[Dict[str, Any]]: A list of loaded records.
         """
         pass
 

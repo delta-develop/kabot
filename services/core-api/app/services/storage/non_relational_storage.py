@@ -1,5 +1,4 @@
-from datetime import UTC, datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from app.services.storage.base import Storage
 from app.services.storage.connections import get_mongo_client
@@ -16,11 +15,6 @@ class NonRelationalStorage(Storage):
             collection_name (str): The name of the MongoDB collection to interact with.
         """
         self.collection_name = collection_name
-        self.save_methods = {
-            "episodic_memory": self._save_episodic_memory,
-            "fact_memory": self._save_fact_memory,
-            "summary_memory": self._save_summary_memory,
-        }
 
     async def setup(self) -> None:
         """
@@ -29,24 +23,13 @@ class NonRelationalStorage(Storage):
         client = await get_mongo_client()
         self.collection = client.get_default_database()[self.collection_name]
 
-    async def save(self, data: Dict[str, Any]) -> None:
-        """
-        Save data to the appropriate memory type based on the collection.
+    async def save(self, data: dict[str, Any]) -> None:
+        """Replace one keyed document in the configured collection."""
+        client = await get_mongo_client()
+        coll = client.get_default_database()[self.collection_name]
+        await coll.replace_one({"subject_id": data["subject_id"]}, data, upsert=True)
 
-        Args:
-            data (Dict[str, Any]): Data payload containing subject_id and memory content.
-
-        Raises:
-            ValueError: If the collection name is invalid.
-        """
-        save_function = self.save_methods.get(self.collection_name)
-
-        if not save_function:
-            raise ValueError(f"Invalid collection name: {self.collection_name}")
-
-        await save_function(data)
-
-    async def get(self, filters: Dict[str, Any]) -> Dict[str, Any] | None:
+    async def get(self, filters: dict[str, Any]) -> dict[str, Any] | None:
         """
         Retrieve a document from the MongoDB collection based on filters.
 
@@ -60,18 +43,6 @@ class NonRelationalStorage(Storage):
         coll = client.get_default_database()[self.collection_name]
         return await coll.find_one(filters, projection={"_id": 0})
 
-    async def bulk_load(self, data: Dict) -> List[Dict[str, Any]]:
-        """
-        Bulk load placeholder method.
-
-        Args:
-            data (Dict): Data to bulk load.
-
-        Returns:
-            List[Dict[str, Any]]: List of results (not implemented).
-        """
-        pass
-
     async def delete(self, key: str) -> None:
         """
         Delete a document from the MongoDB collection by subject_id.
@@ -82,75 +53,3 @@ class NonRelationalStorage(Storage):
         client = await get_mongo_client()
         coll = client.get_default_database()[self.collection_name]
         await coll.delete_one({"subject_id": key})
-
-    async def _save_episodic_memory(self, payload):
-        """
-        Save turns into `history` preserving FIFO order.
-
-        Args:
-            payload (dict): Dictionary with subject_id and a list of turns in data.
-
-        Raises:
-            ValueError: If `data` is not a list.
-        """
-        key = payload["subject_id"]
-        turns = payload["data"]
-        if not isinstance(turns, list):
-            raise ValueError("EpisodicMemory expects `data` to be a list of turns")
-
-        client = await get_mongo_client()
-        coll = client.get_default_database()[self.collection_name]
-        await coll.update_one(
-            {"subject_id": key},
-            {
-                "$push": {"history": {"$each": turns}},
-                "$set": {"last_updated": datetime.now(UTC).isoformat()},
-            },
-            upsert=True,
-        )
-
-    async def _save_fact_memory(self, payload):
-        """
-        Replace the entire `facts` object.
-
-        Args:
-            payload (dict): Dictionary with keys 'subject_id' and 'data' representing facts to store.
-        """
-        key = payload["subject_id"]
-        new_facts = payload["data"]
-
-        client = await get_mongo_client()
-        coll = client.get_default_database()[self.collection_name]
-        await coll.update_one(
-            {"subject_id": key},
-            {
-                "$set": {
-                    "facts": new_facts,
-                    "last_updated": datetime.now(UTC).isoformat(),
-                }
-            },
-            upsert=True,
-        )
-
-    async def _save_summary_memory(self, payload):
-        """
-        Replace the summary text.
-
-        Args:
-            payload (dict): Dictionary with keys 'subject_id' and 'data' containing the summary string.
-        """
-        key = payload["subject_id"]
-        summary_text = payload["data"]
-
-        client = await get_mongo_client()
-        coll = client.get_default_database()[self.collection_name]
-        await coll.update_one(
-            {"subject_id": key},
-            {
-                "$set": {
-                    "summary": summary_text,
-                    "last_updated": datetime.now(UTC).isoformat(),
-                }
-            },
-            upsert=True,
-        )

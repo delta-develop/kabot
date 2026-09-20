@@ -38,12 +38,10 @@ async def test_store_in_memory_merges_and_saves():
         prompt = mock_llm.generate_response.call_args.args[0][0]["content"]
         assert "user: My favorite color is green" in prompt
         assert "assistant: Noted" in prompt
-        mock_storage.save.assert_awaited_once_with(
-            {
-                "subject_id": "subject-123",
-                "data": {"name": "Leo", "color_favorito": "verde"},
-            }
-        )
+        saved = mock_storage.save.await_args.args[0]
+        assert saved["subject_id"] == "subject-123"
+        assert saved["facts"] == {"name": "Leo", "color_favorito": "verde"}
+        assert saved["last_updated"]
 
 
 @pytest.mark.asyncio

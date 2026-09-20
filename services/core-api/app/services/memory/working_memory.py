@@ -1,21 +1,20 @@
 import os
-from typing import Any
 
 from app.models.session import SessionDocument
-from app.services.memory.memory import Memory
+from app.services.memory.memory import KeyedMemory
 from app.services.storage.cache_storage import CacheStorage
 
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "1800"))
 
 
-class WorkingMemory(Memory):
+class WorkingMemory(KeyedMemory[SessionDocument]):
     """Handles temporary memory using a caching layer."""
 
     def __init__(self):
         """Initializes the WorkingMemory with a CacheStorage instance."""
         self.storage = CacheStorage(namespace="session")
 
-    async def store_in_memory(self, key: str, data: Any) -> None:
+    async def store_in_memory(self, key: str, data: SessionDocument) -> None:
         """Stores a complete session document with a renewed TTL.
 
         Args:
@@ -27,7 +26,7 @@ class WorkingMemory(Memory):
             key, session.model_dump(mode="json"), ttl=SESSION_TTL_SECONDS
         )
 
-    async def retrieve_from_memory(self, key: str) -> Any:
+    async def retrieve_from_memory(self, key: str) -> SessionDocument | None:
         """Retrieves and deserializes data from memory by key.
 
         Args:

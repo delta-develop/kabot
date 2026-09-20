@@ -1,12 +1,13 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from app.prompts.summary import build_summary_merge_prompt
 from app.services.llm.base import LLMBase
-from app.services.memory.memory import Memory
+from app.services.memory.memory import KeyedMemory
 from app.services.storage.non_relational_storage import NonRelationalStorage
 
 
-class SummaryMemory(Memory):
+class SummaryMemory(KeyedMemory[str]):
     """Handles storing and retrieving summarized conversational memory."""
 
     def __init__(self, llm: LLMBase):
@@ -26,9 +27,15 @@ class SummaryMemory(Memory):
             recent_messages=data, previous_summary=old_summary or ""
         )
         merged_summary = await self.llm.generate_response([prompt])
-        await self.storage.save({"subject_id": key, "data": merged_summary})
+        await self.storage.save(
+            {
+                "subject_id": key,
+                "summary": merged_summary,
+                "last_updated": datetime.now(UTC).isoformat(),
+            }
+        )
 
-    async def retrieve_from_memory(self, key: str) -> Any:
+    async def retrieve_from_memory(self, key: str) -> str | None:
         """Retrieves the summarized memory for a given user key.
 
         Args:

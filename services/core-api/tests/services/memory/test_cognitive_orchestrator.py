@@ -54,6 +54,20 @@ async def test_handle_incoming_message_returns_direct_reply(orchestrator):
     assert stored_session.turns[0].assistant_text == direct_reply
 
 
+@pytest.mark.asyncio
+async def test_turn_sequence_is_monotonic_within_session(orchestrator):
+    working_session = session()
+    orchestrator.working_memory.retrieve_from_memory.return_value = working_session
+    orchestrator.fact_memory.retrieve_from_memory.return_value = ""
+    orchestrator.summary_memory.retrieve_from_memory.return_value = ""
+    orchestrator.llm.generate_response.return_value = "reply"
+
+    await orchestrator.handle_incoming_message("leo", "session-id", "first")
+    await orchestrator.handle_incoming_message("leo", "session-id", "second")
+
+    assert [item.seq for item in working_session.turns] == [0, 1]
+
+
 def test_cognitive_orchestrator_naive_flag_initialization():
     assert CognitiveOrchestrator().naive is False
     assert CognitiveOrchestrator(naive=True).naive is True
@@ -74,8 +88,9 @@ async def test_cognitive_orchestrator_from_defaults_naive_flag(mocker):
 @pytest.mark.asyncio
 async def test_handle_incoming_message_naive_true(orchestrator):
     orchestrator.naive = True
-    orchestrator.episodic_memory.retrieve_from_memory.return_value = [
-        turn("episodic message")
+    orchestrator.episodic_memory.history.return_value = [
+        turn("most recent", seq=1),
+        turn("older", seq=0),
     ]
     orchestrator.working_memory.retrieve_from_memory.return_value = session(
         turn("working message")
@@ -90,10 +105,13 @@ async def test_handle_incoming_message_naive_true(orchestrator):
     context_content = prompt_messages[1]["content"]
     assert "<fact_memory></fact_memory>" in context_content
     assert "<summary_memory></summary_memory>" in context_content
-    assert "<user>episodic message</user>" in context_content
+    assert "<user>most recent</user>" in context_content
+    assert "<user>older</user>" in context_content
+    assert context_content.index("most recent") < context_content.index("older")
     assert "working message" not in context_content
     assert "User fact" not in context_content
     assert "User summary" not in context_content
+    orchestrator.episodic_memory.history.assert_awaited_once_with("leo")
 
 
 @pytest.mark.asyncio
@@ -125,27 +143,40 @@ async def test_handle_incoming_message_rejects_missing_session(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_subject_memory_survives_between_sessions(orchestrator):
+async def test_subject_memory_survives_between_sessions(orchestrator, mocker):
     session_a = session(turn("My favorite color is green"))
+    original_turns = list(session_a.turns)
     session_b = session()
     orchestrator.working_memory.retrieve_from_memory.side_effect = [
         session_a,
         session_b,
     ]
+    get_embeddings = mocker.patch(
+        "app.services.memory.cognitive_orchestrator.get_embeddings",
+        AsyncMock(return_value=[[0.0] * 1536]),
+    )
 
     await orchestrator.persist_conversation_closure("leo", "session-a")
 
-    stored_turn = session_a.turns[0].model_dump(mode="json")
-    orchestrator.episodic_memory.store_in_memory.assert_awaited_once_with(
-        "leo", [{"session_id": "session-a", **stored_turn}]
+    get_embeddings.assert_awaited_once_with(
+        ["My favorite color is green\nassistant response"]
     )
+    stored_turns = orchestrator.episodic_memory.append.await_args.args[0]
+    assert len(stored_turns) == 1
+    assert stored_turns[0].subject_id == "leo"
+    assert stored_turns[0].session_id == "session-a"
+    assert stored_turns[0].seq == 0
+    assert stored_turns[0].embedding == [0.0] * 1536
     orchestrator.fact_memory.store_in_memory.assert_awaited_once_with(
-        "leo", session_a.turns
+        "leo", original_turns
     )
     orchestrator.summary_memory.store_in_memory.assert_awaited_once_with(
-        "leo", session_a.turns
+        "leo", original_turns
     )
-    orchestrator.working_memory.delete_from_memory.assert_awaited_once_with("session-a")
+    consolidated = orchestrator.working_memory.store_in_memory.await_args.args[1]
+    assert consolidated.turns == []
+    assert consolidated.status == "consolidated"
+    orchestrator.working_memory.delete_from_memory.assert_not_awaited()
 
     orchestrator.fact_memory.retrieve_from_memory.return_value = "Favorite color: green"
     orchestrator.summary_memory.retrieve_from_memory.return_value = "Prior conversation"

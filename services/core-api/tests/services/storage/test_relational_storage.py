@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import UUID
 
@@ -5,6 +6,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.pool import NullPool
 
+from app.models.turn import Turn
 from app.services.storage import relational_storage
 from app.services.storage.relational_storage import RelationalStorage
 
@@ -14,6 +16,18 @@ def async_context_manager(value):
     manager.__aenter__ = AsyncMock(return_value=value)
     manager.__aexit__ = AsyncMock(return_value=None)
     return manager
+
+
+def turn(seq: int = 0) -> Turn:
+    return Turn(
+        subject_id="leo",
+        session_id="session-id",
+        seq=seq,
+        ts=datetime.now(UTC),
+        user_text="hello",
+        assistant_text="hi",
+        embedding=[0.0] * 1536,
+    )
 
 
 @pytest.mark.asyncio
@@ -33,7 +47,6 @@ async def test_setup_bootstraps_vector_before_creating_the_main_schema(mocker):
     )
     main_engine = MagicMock()
     main_engine.begin.return_value = async_context_manager(main_connection)
-
     engines = iter([bootstrap_engine, main_engine])
 
     def create_engine_side_effect(*args, **kwargs):
@@ -69,46 +82,64 @@ async def test_setup_bootstraps_vector_before_creating_the_main_schema(mocker):
 
 
 @pytest.mark.asyncio
-async def test_upsert_items_updates_content_but_preserves_id():
+async def test_save_many_uses_plain_insert():
     session = MagicMock()
     session.begin.return_value = async_context_manager(None)
-    session.execute = AsyncMock()
-    session_factory = MagicMock(return_value=async_context_manager(session))
     storage = RelationalStorage()
-    storage.session_local = session_factory
-    item = {
-        "namespace": "restaurant-supplies",
-        "external_id": "sku-1",
-        "title": "Salt",
-        "body": "Fine salt",
-        "attributes": {"store": "abarrotes"},
-        "embedding": [0.0] * 1536,
-    }
+    storage.session_local = MagicMock(return_value=async_context_manager(session))
+    turns = [turn()]
 
-    await storage.upsert_items([item])
+    await storage.save_many(turns)
 
-    statement = session.execute.await_args.args[0]
-    sql = str(statement.compile(dialect=postgresql.dialect()))
-    assert "ON CONFLICT (namespace, external_id) DO UPDATE" in sql
-    assert "title = excluded.title" in sql
-    assert "body = excluded.body" in sql
-    assert "attributes = excluded.attributes" in sql
-    assert "embedding = excluded.embedding" in sql
-    assert "id = excluded.id" not in sql
+    session.add_all.assert_called_once_with(turns)
     session.begin.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_knn_search_scopes_filters_orders_and_shapes_results():
+async def test_history_orders_most_recent_first_with_tie_breakers():
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [turn(1), turn(0)]
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    storage = RelationalStorage()
+    storage.session_local = MagicMock(return_value=async_context_manager(session))
+
+    rows = await storage.history("leo", limit=2)
+
+    statement = session.execute.await_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "WHERE turn.subject_id" in sql
+    assert "ORDER BY turn.ts DESC, turn.session_id DESC, turn.seq DESC" in sql
+    assert "LIMIT" in sql
+    assert [row.seq for row in rows] == [1, 0]
+
+
+def test_turn_schema_preserves_vector_and_unique_constraint():
+    table = Turn.__table__
+
+    assert table.c.embedding.type.dim == 1536
+    assert any(
+        constraint.name == "uq_turn_session_id_seq" for constraint in table.constraints
+    )
+    embedding_index = next(index for index in table.indexes)
+    assert embedding_index.dialect_options["postgresql"]["using"] == "hnsw"
+    assert embedding_index.dialect_options["postgresql"]["ops"] == {
+        "embedding": "vector_cosine_ops"
+    }
+
+
+@pytest.mark.asyncio
+async def test_knn_search_isolates_subject_orders_and_omits_embedding():
     result = MagicMock()
     result.mappings.return_value.all.return_value = [
         {
             "id": UUID("00000000-0000-0000-0000-000000000001"),
-            "namespace": "restaurant-supplies",
-            "external_id": "sku-1",
-            "title": "Salt",
-            "body": "Fine salt",
-            "attributes": {"store": "abarrotes"},
+            "subject_id": "leo",
+            "session_id": "session-id",
+            "seq": 0,
+            "ts": datetime.now(UTC),
+            "user_text": "hello",
+            "assistant_text": "hi",
             "distance": 0.25,
         }
     ]
@@ -117,38 +148,20 @@ async def test_knn_search_scopes_filters_orders_and_shapes_results():
     storage = RelationalStorage()
     storage.session_local = MagicMock(return_value=async_context_manager(session))
 
-    rows = await storage.knn_search(
-        "restaurant-supplies",
-        [0.0] * 1536,
-        filters={"store": "abarrotes"},
-        k=3,
-    )
+    rows = await storage.knn_search("leo", [0.0] * 1536, k=3)
 
     statement = session.execute.await_args.args[0]
-    compiled = statement.compile(dialect=postgresql.dialect())
-    sql = str(compiled)
-    assert "catalog_item.namespace" in sql
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "WHERE turn.subject_id" in sql
     assert "<=>" in sql
     assert "ORDER BY distance ASC" in sql
-    assert 3 in compiled.params.values()
     assert "embedding" not in rows[0]
-    assert rows == [
-        {
-            "id": "00000000-0000-0000-0000-000000000001",
-            "namespace": "restaurant-supplies",
-            "external_id": "sku-1",
-            "title": "Salt",
-            "body": "Fine salt",
-            "attributes": {"store": "abarrotes"},
-            "distance": 0.25,
-        }
-    ]
+    assert rows[0]["id"] == "00000000-0000-0000-0000-000000000001"
+    assert rows[0]["subject_id"] == "leo"
 
 
 @pytest.mark.parametrize("k", [0, 101])
 @pytest.mark.asyncio
 async def test_knn_search_rejects_k_outside_contract(k):
-    storage = RelationalStorage()
-
     with pytest.raises(ValueError, match="k must be between 1 and 100"):
-        await storage.knn_search("restaurant-supplies", [0.0] * 1536, k=k)
+        await RelationalStorage().knn_search("leo", [0.0] * 1536, k=k)

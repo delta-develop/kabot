@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel
 
 from app.models.session import SessionDocument
@@ -19,6 +19,13 @@ class SessionCreated(BaseModel):
     session_id: str
 
 
+class SessionStatus(BaseModel):
+    session_id: str
+    subject_id: str
+    status: str
+    turn_count: int
+
+
 @router.post("", response_model=SessionCreated)
 async def create_session(request: SessionCreate) -> SessionCreated:
     session_id = str(uuid4())
@@ -30,15 +37,32 @@ async def create_session(request: SessionCreate) -> SessionCreated:
     return SessionCreated(session_id=session_id)
 
 
+@router.get("/{session_id}", response_model=SessionStatus)
+async def get_session(session_id: str) -> SessionStatus:
+    session = await WorkingMemory().retrieve_from_memory(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return SessionStatus(
+        session_id=session_id,
+        subject_id=session.subject_id,
+        status=session.status,
+        turn_count=len(session.turns),
+    )
+
+
 @router.post("/{session_id}/close", status_code=status.HTTP_202_ACCEPTED)
-async def close_session(session_id: str) -> None:
+async def close_session(session_id: str, background: BackgroundTasks) -> dict[str, str]:
     orchestrator = await CognitiveOrchestrator.from_defaults()
     session = await orchestrator.working_memory.retrieve_from_memory(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
+    if session.status != "open":
+        raise HTTPException(status_code=409, detail=f"Session is {session.status}")
 
-    # ponytail: consolidate inline until LEO-27 replaces this call with a Redis Stream.
-    try:
-        await orchestrator.persist_conversation_closure(session.subject_id, session_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Session not found") from None
+    session.status = "consolidating"
+    await orchestrator.working_memory.store_in_memory(session_id, session)
+    # ponytail: BackgroundTasks has no retry; LEO-27 replaces it with Redis Streams.
+    background.add_task(
+        orchestrator.persist_conversation_closure, session.subject_id, session_id
+    )
+    return {"status": "consolidating"}

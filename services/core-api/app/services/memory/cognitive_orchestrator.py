@@ -1,19 +1,23 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Sequence
 
 from app.models.session import SessionDocument, TurnDraft
+from app.models.turn import Turn
 from app.prompts.conversation import build_conversation_prompt
+from app.services.llm.base import LLMBase
+from app.services.memory.memory import EpisodicLog, KeyedMemory
+from app.utils.openai_utils import get_embeddings
 
 
 class CognitiveOrchestrator:
     """Coordinates conversational responses and layered memory."""
 
     def __init__(self, naive: bool = False):
-        self.working_memory: Any = None
-        self.fact_memory: Any = None
-        self.episodic_memory: Any = None
-        self.summary_memory: Any = None
-        self.llm: Any = None
+        self.working_memory: KeyedMemory[SessionDocument]
+        self.fact_memory: KeyedMemory[Any]
+        self.episodic_memory: EpisodicLog
+        self.summary_memory: KeyedMemory[Any]
+        self.llm: LLMBase
         self.naive: bool = naive
 
     async def handle_incoming_message(
@@ -24,6 +28,7 @@ class CognitiveOrchestrator:
         if session is None:
             raise KeyError(f"Session not found: {session_id}")
 
+        history: Sequence[TurnDraft | Turn]
         if self.naive:
             history = await self.expand_context_from_long_term(subject_id)
             facts, summary = "", ""
@@ -46,15 +51,15 @@ class CognitiveOrchestrator:
         summary = await self.summary_memory.retrieve_from_memory(subject_id) or ""
         return facts, summary
 
-    def _format_history(self, turns: list[TurnDraft]) -> str:
+    def _format_history(self, turns: Sequence[TurnDraft | Turn]) -> str:
         return "\n".join(
             f"<user>{turn.user_text}</user>"
             f"<assistant>{turn.assistant_text}</assistant>"
             for turn in turns
         )
 
-    async def expand_context_from_long_term(self, subject_id: str) -> list[TurnDraft]:
-        return await self.episodic_memory.retrieve_from_memory(subject_id) or []
+    async def expand_context_from_long_term(self, subject_id: str) -> list[Turn]:
+        return await self.episodic_memory.history(subject_id)
 
     async def persist_conversation_closure(
         self, subject_id: str, session_id: str
@@ -64,14 +69,24 @@ class CognitiveOrchestrator:
             raise KeyError(f"Session not found: {session_id}")
 
         if session.turns:
+            embeddings = await get_embeddings(
+                [f"{turn.user_text}\n{turn.assistant_text}" for turn in session.turns]
+            )
             episodic_turns = [
-                {"session_id": session_id, **turn.model_dump(mode="json")}
-                for turn in session.turns
+                Turn(
+                    subject_id=subject_id,
+                    session_id=session_id,
+                    **turn.model_dump(),
+                    embedding=embedding,
+                )
+                for turn, embedding in zip(session.turns, embeddings, strict=True)
             ]
-            await self.episodic_memory.store_in_memory(subject_id, episodic_turns)
+            await self.episodic_memory.append(episodic_turns)
             await self.summary_memory.store_in_memory(subject_id, session.turns)
             await self.fact_memory.store_in_memory(subject_id, session.turns)
-        await self.working_memory.delete_from_memory(session_id)
+        session.turns = []
+        session.status = "consolidated"
+        await self.working_memory.store_in_memory(session_id, session)
 
     async def generate_and_merge_summary(
         self, subject_id: str, session_id: str

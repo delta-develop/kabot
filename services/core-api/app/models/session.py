@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -22,3 +23,4 @@ class SessionDocument(BaseModel):
     subject_id: str
     turns: list[TurnDraft] = []
     last_activity: datetime
+    status: Literal["open", "consolidating", "consolidated"] = "open"
