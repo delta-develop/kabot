@@ -12,6 +12,7 @@ class FragmentRef(BaseModel):
     session_id: str
     ts: datetime
     similarity: float
+    usefulness: float | None = None
     seqs: list[int]
 
 

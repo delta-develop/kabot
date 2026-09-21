@@ -48,12 +48,18 @@ class Turn(SQLModel, table=True):
 
 
 class Fragment(BaseModel):
-    """A similarity hit with its neighboring turns."""
+    """A similarity hit with its neighboring turns.
+
+    `usefulness` is the noul the re-ranker gave this fragment against the live
+    message, and stays `None` when the re-rank did not run. Cosine says what the
+    fragment is about; the noul says whether it helps answer this one.
+    """
 
     turns: list[Turn]
     session_id: str
     ts: datetime
     similarity: float
+    usefulness: float | None = None
 
 
 class TurnView(BaseModel):
