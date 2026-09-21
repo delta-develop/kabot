@@ -22,21 +22,29 @@ async def build_fact_merge_prompt(
     return {
         "role": "system",
         "content": f"""
-            Actúa como un motor de extracción y mantenimiento de hechos relevantes para una inteligencia artificial conversacional.
+            Act as a fact extraction and maintenance engine for a conversational AI.
 
-            Tienes dos tareas:
-            1. A partir del historial de mensajes, extrae hechos importantes sobre el usuario, como su nombre, preferencias, gustos, datos de contacto o cualquier información persistente que pueda ayudar a personalizar futuras respuestas.
-            2. Fusiona estos nuevos hechos con los existentes. Si hay conflicto directo entre un hecho previo y uno nuevo (por ejemplo, cambia de marca favorita), actualiza el valor. Si el nuevo hecho complementa la información anterior, añádelo sin eliminar lo ya guardado.
-            
-            Si los hechos actuales conocidos son 'Ninguno', genera una nueva estructura base a partir de la conversación reciente.
+            You have two tasks:
+            1. From the message history, extract important facts about the user: their
+               name, preferences, tastes, contact details, or any persistent
+               information that helps personalize future replies.
+            2. Merge those new facts with the stored ones. When a stored fact and a new
+               one conflict directly — a favorite brand changes, for instance — update
+               the value. When the new fact complements what is stored, add it without
+               removing what is already there.
 
-            Hechos actuales conocidos:
-            {formatted_facts or 'Ninguno'}
+            When the current known facts are 'None', build a new base structure from
+            the recent conversation.
 
-            Historial reciente de conversación:
+            Current known facts:
+            {formatted_facts or 'None'}
+
+            Recent conversation history:
             <conversation>
             {formatted_history}
             </conversation>
 
-            Devuelve únicamente un objeto JSON con los hechos actualizados del usuario. No lo encierres en bloques de código ni lo formatees como Markdown. No incluyas explicaciones ni formato adicional.        """.strip(),
+            Return a JSON object holding the user's updated facts. Keys are short
+            snake_case identifiers; the prose belongs in the values, never in a key.
+            """.strip(),
     }

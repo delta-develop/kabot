@@ -7,6 +7,13 @@ from pymongo import AsyncMongoClient
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017/elephant")
 
+# redis-py applies this timeout to the socket read of a blocking command, so a
+# BLOCK of N seconds reads for N seconds against a perfectly healthy server. Left
+# at the default of `block` itself, XREADGROUP loses that race every time the
+# stream is idle and kills the worker. It has to outlast the longest blocking
+# call, which is `consolidation.BLOCK_MS`.
+REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "30"))
+
 _redis_client = None
 _mongo_client = None
 _openai_client = None
@@ -23,7 +30,11 @@ async def get_redis_client(redis_url=REDIS_URL):
     """
     global _redis_client
     if _redis_client is None:
-        _redis_client = aioredis.from_url(redis_url, decode_responses=True)
+        _redis_client = aioredis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_timeout=REDIS_SOCKET_TIMEOUT,
+        )
     return _redis_client
 
 

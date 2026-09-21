@@ -22,10 +22,10 @@ RECALL_K = int(os.getenv("RECALL_K", "5"))
 # Section headers and role prefixes instead of XML tags: measured on o200k_base,
 # tags cost 9 tokens per turn against 4, which is 7.5% of a 2000-token budget on
 # a 30-turn conversation. "User:" costs the same as "U:", so it stays readable.
-FACTS_HEADER = "## hechos\n"
-SUMMARY_HEADER = "## resumen\n"
-RECALL_HEADER = "## recordado\n"
-WORKING_HEADER = "## en curso\n"
+FACTS_HEADER = "## facts\n"
+SUMMARY_HEADER = "## summary\n"
+RECALL_HEADER = "## recalled\n"
+WORKING_HEADER = "## current\n"
 
 # Blocks are spent by priority and read in a different order: working memory sits
 # next to the question because it is the immediate context, and recall comes

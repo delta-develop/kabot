@@ -110,8 +110,8 @@ async def test_naive_history_prompt_starts_with_first_turn_of_first_session(
 
     prompt_messages = orchestrator.llm.generate_response.call_args.args[0]
     context_content = prompt_messages[1]["content"]
-    assert "## hechos" not in context_content
-    assert "## resumen" not in context_content
+    assert "## facts" not in context_content
+    assert "## summary" not in context_content
     assert "User: first turn of first session" in context_content
     assert "User: last turn of latest session" in context_content
     assert context_content.index("first turn of first session") < context_content.index(
@@ -196,7 +196,7 @@ async def test_subject_memory_survives_between_sessions(orchestrator, mocker):
     context = orchestrator.llm.generate_response.call_args.args[0][1]["content"]
     assert "Favorite color: green" in context
     assert "Prior conversation" in context
-    assert "## en curso" not in context
+    assert "## current" not in context
 
 
 @pytest.mark.asyncio

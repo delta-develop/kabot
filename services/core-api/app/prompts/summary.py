@@ -4,20 +4,19 @@ from app.models.session import TurnDraft
 async def build_summary_merge_prompt(
     recent_messages: list[TurnDraft], previous_summary: str
 ) -> dict:
-    """
-    Construye un prompt para que el LLM genere o fusione un resumen conversacional.
+    """Builds a prompt that generates a conversational summary, or merges one.
 
     Args:
-        recent_messages (list): Lista de mensajes recientes de la conversación.
-        previous_summary (str): Resumen anterior almacenado.
+        recent_messages: Complete recent user and assistant turns.
+        previous_summary: The summary stored for this subject, if any.
 
     Returns:
-        dict: Objeto con rol y contenido para el LLM.
+        A system prompt for summary generation and merging.
     """
     if not recent_messages and not previous_summary:
         return {
             "role": "system",
-            "content": "No hay historial ni resumen previo disponible. No es posible generar un resumen en este momento.",
+            "content": "There is no history and no prior summary. No summary can be generated.",
         }
 
     formatted_history = "\n".join(
@@ -29,90 +28,41 @@ async def build_summary_merge_prompt(
         return {
             "role": "system",
             "content": f"""
-                Actúa como una memoria de resumen para una inteligencia artificial conversacional.
+                Act as the summary memory of a conversational AI.
 
-                Tu tarea es generar un TL;DR a partir de los mensajes recientes de una conversación entre un usuario y un asistente. El resumen debe capturar la intención, tono, preguntas importantes, respuestas clave y cualquier información personal relevante.
+                Write a TL;DR of the recent messages between a user and an assistant.
+                Capture intent, tone, the questions that mattered, the answers that
+                mattered, and any relevant personal information.
 
-                Mensajes recientes:
+                Recent messages:
                 <conversation>
                 {formatted_history}
                 </conversation>
 
-                Devuelve únicamente el resumen generado. No incluyas encabezados ni explicaciones.
+                Return only the summary. No headers, no explanations.
                 """.strip(),
         }
 
     return {
         "role": "system",
         "content": f"""
-            Actúa como una memoria de resumen para una inteligencia artificial conversacional.
+            Act as the summary memory of a conversational AI.
 
-            Tu tarea consiste en dos pasos:
-            1. Leer los mensajes recientes de una conversación entre un usuario y un asistente, y generar un nuevo TL;DR que capte su intención, tono, preguntas importantes, respuestas clave y cualquier información personal relevante.
-            2. Fusionar ese nuevo resumen con el resumen anterior ya existente, generando uno solo que combine todo el contexto de forma coherente y compacta.
+            Your task has two steps:
+            1. Read the recent messages between a user and an assistant and write a new
+               TL;DR capturing intent, tone, the questions that mattered, the answers
+               that mattered, and any relevant personal information.
+            2. Merge that new summary with the stored one into a single summary that
+               holds the whole context coherently and compactly.
 
-            Resumen anterior:
+            Previous summary:
             {previous_summary}
 
-            Mensajes recientes:
+            Recent messages:
             <conversation>
             {formatted_history}
             </conversation>
 
-            Devuelve únicamente el nuevo resumen combinado. No incluyas encabezados ni explicaciones.
+            Return only the merged summary. No headers, no explanations.
             """.strip(),
     }
-
-
-async def generate_summary_prompt(history: list) -> dict:
-    """
-    Genera un prompt para resumir una conversación completa.
-
-    Args:
-        history (list): Historial completo de mensajes.
-
-    Returns:
-        dict: Prompt estructurado para el LLM.
-    """
-    formatted_history = "\n".join(f"{m['role']}: {m['content']}" for m in history)
-
-    return {
-        "role": "system",
-        "content": f"""
-            Actúa como un sistema de memoria de trabajo para una inteligencia artificial conversacional.
-
-            Tu tarea es resumir de forma compacta los siguientes mensajes de una conversación entre un usuario y un asistente.
-
-            El resumen debe conservar el contexto necesario para continuar la conversación fluidamente, sin perder detalles importantes.
-
-            Incluye en el resumen:
-            - Intención del usuario si se puede deducir
-            - Preguntas clave que haya hecho
-            - Respuestas del asistente que aporten al flujo
-            - Datos personales o preferencias compartidas por el usuario (si existen)
-            - Cualquier emoción, actitud o tono relevante
-
-            Escribe el resumen en tercera persona, de manera objetiva, sin agregar opiniones ni usar frases como 'el asistente dijo'.
-
-            Muy importante:
-            - NO asumas que una sugerencia hecha por el asistente fue aceptada por el usuario a menos que haya una afirmación explícita (por ejemplo, "me interesa", "quiero ese", "me gusta", etc.)
-            - Ignora información que fue solamente propuesta por el asistente y no confirmada por el usuario.
-            - No incluyas intereses o preferencias si el usuario no los mencionó directamente y de manera positiva.
-            - También incluye rechazos explícitos del usuario hacia ciertos temas, preferencias o características, si existen.
-            - Si el usuario expresó desinterés o rechazo por algún elemento, no lo menciones como recomendación.
-            - Si no estás completamente seguro del interés actual del usuario en un tema específico, omite mencionarlo.
-
-            Devuelve únicamente el texto del resumen. No incluyas encabezados ni explicaciones.
-
-            <conversation>
-            {formatted_history}
-            </conversation>
-            """.strip(),
-    }
-
-
-CONTEXT_PROMPT = {
-    "role": "system",
-    "content": "Lo siguiente es el contexto de la conversación. No debes responder a nada de esto, "
-    "sólo te sirve como memoria de trabajo para entender al usuario:",
-}
