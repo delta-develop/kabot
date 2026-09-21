@@ -546,12 +546,20 @@ tools perform the same phase by following §6.7 directly.
 
 ## 8. Stack and services
 
-**Project:** Elephant — a B2B multi-store marketplace backend operated by a conversational
-agent with layered memory. It is built by repurposing the inherited repository and
-retiring its original car-sales domain.
+**Project:** Elephant — memory as a service. It gives a conversational assistant the
+layered memory that a raw model API does not have, and it answers one question:
+*what is the best context that fits in N tokens?* It is built by repurposing the
+inherited repository and retiring its original car-sales domain.
 
-**In scope:** catalog, hybrid search, multi-store orders, inventory.
-**Out of scope:** ❌ geolocation, ❌ delivery, ❌ payments.
+Memory lives in four layers, each a different answer to "how do I spend fewer tokens
+without forgetting": **working** (the open session, Redis), **facts** (what is known
+about the subject, MongoDB), **summary** (how it is condensed, MongoDB), and
+**episodic** (every turn, embedded and searchable, Postgres with pgvector).
+
+**In scope:** the four layers, budgeted context assembly, associative recall, and
+asynchronous consolidation.
+**Out of scope:** ❌ business domain of any kind, ❌ orders, ❌ inventory, ❌ payments.
+Whoever consumes this owns their own truth; the core owns the conversation.
 
 **Runtime**, as pinned in the root `Dockerfile` (parameterized with `ARG SERVICE`),
 `services/core-api/pyproject.toml` and the root `uv.lock` (🟢 verified 2026-09-18):
@@ -565,8 +573,9 @@ retiring its original car-sales domain.
 | Postgres drivers | `asyncpg` 0.31.0, SQLAlchemy 2.0.54 |
 | LLM client | `openai` 3.16.2 |
 
-**Services** in `docker-compose.yml`: `core-api`, `agent`, `memory`, `mongo:5`,
-`redis:7`, and `postgres:15`.
+**Services** in `docker-compose.yml`: `core-api`, `consolidator` (the same image with
+a worker entrypoint), `agent`, `memory`, `mongo:5`, `redis:7`, and
+`pgvector/pgvector:pg15`.
 
 **Source layout:**
 
@@ -575,17 +584,18 @@ services/
 ├── core-api/
 │   ├── app/
 │   │   ├── main.py          # FastAPI composition root
-│   │   ├── api/routes/      # memory · meta
+│   │   ├── api/routes/      # sessions · recall · meta
 │   │   ├── models/
 │   │   ├── prompts/
-│   │   ├── services/
+│   │   ├── services/        # llm · memory · storage
+│   │   ├── workers/         # consolidation, its own entrypoint
 │   │   └── utils/
 │   ├── tests/               # mirrors app/
 │   └── pyproject.toml
 ├── agent/                   # minimal FastAPI app, own pyproject.toml and tests
 └── memory/                  # minimal FastAPI app, own pyproject.toml and tests
-packages/                    # contracts deferred to LEO-18
-frontend/                    # future deployable unit
+packages/                    # empty; shared contracts were cancelled with LEO-18
+frontend/                    # empty; future deployable unit
 Dockerfile                   # root, parameterized with ARG SERVICE
 docker-compose.yml           # root orchestration
 .superset/                   # config.json, setup/teardown scripts, port helpers
@@ -602,9 +612,17 @@ docker-compose.yml           # root orchestration
   pytest per service in `services/*/pyproject.toml`. Pre-commit runs black and isort
   from the workspace venv.
 
-The Cimientos track continues with **LEO-14** (dependencies), **LEO-15** (migration to
-`uv` plus workspace configuration), **LEO-16** (`motor` to `AsyncMongoClient`), and
-**LEO-17** (pgvector).
+- Consolidation runs out of process. `POST /sessions/{id}/close` only enqueues on a
+  Redis Stream; the `consolidator` worker embeds the turns, merges facts and summary,
+  and acknowledges. A sweep catches sessions that go quiet without ever being closed.
+- `redis-py` times the socket read of a blocking command against the command's own
+  `block` window, so `connections.REDIS_SOCKET_TIMEOUT` has to outlast
+  `consolidation.BLOCK_MS`. A test pins that invariant.
+
+The Cimientos track is closed: **LEO-14** through **LEO-17** are done and **LEO-18**
+(shared contracts) was cancelled. What remains open is **LEO-28** (example consumer,
+demo script, benchmark), **LEO-29** (architecture document) and **LEO-30** (a second
+consumer).
 
 ## 9. Verification gate
 
