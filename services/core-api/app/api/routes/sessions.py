@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.models.context import Context
@@ -15,6 +15,7 @@ from app.services.memory.context_builder import (
 )
 from app.services.memory.episodic_memory import EpisodicMemory
 from app.services.memory.working_memory import WorkingMemory
+from app.services.storage.consolidation_stream import enqueue
 from app.utils.openai_utils import MAX_EMBEDDING_INPUT_BYTES
 
 MAX_MESSAGE_LENGTH = 4000
@@ -130,6 +131,13 @@ async def chat(
     )
     _validate_query(request.message)
     session = await _load_session(session_id)
+    if session.status != "open":
+        # Writing here would resurrect the session: seq restarts at zero while
+        # the turns it already had live in Postgres under the same session_id.
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session is {session.status}; open a new session to keep talking",
+        )
     orchestrator = await CognitiveOrchestrator.from_defaults(naive=naive)
     reply, context = await orchestrator.handle_incoming_message(
         session.subject_id, session_id, request.message, budget
@@ -159,18 +167,23 @@ async def get_session_turns(
 
 
 @router.post("/{session_id}/close", status_code=status.HTTP_202_ACCEPTED)
-async def close_session(session_id: str, background: BackgroundTasks) -> dict[str, str]:
-    orchestrator = await CognitiveOrchestrator.from_defaults()
-    session = await orchestrator.working_memory.retrieve_from_memory(session_id)
+async def close_session(session_id: str) -> dict[str, str]:
+    """Queues the session for consolidation and returns immediately.
+
+    The work happens in the consolidation worker, so this handler touches Redis
+    and nothing else.
+    """
+    working_memory = WorkingMemory()
+    session = await working_memory.retrieve_from_memory(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     if session.status != "open":
         raise HTTPException(status_code=409, detail=f"Session is {session.status}")
 
+    # Queued before the status is written: a session in the stream still
+    # consolidates if this process dies here, while a session marked
+    # `consolidating` with nothing queued is the hole LEO-24 left open.
+    await enqueue(session_id)
     session.status = "consolidating"
-    await orchestrator.working_memory.store_in_memory(session_id, session)
-    # ponytail: BackgroundTasks has no retry; LEO-27 replaces it with Redis Streams.
-    background.add_task(
-        orchestrator.persist_conversation_closure, session.subject_id, session_id
-    )
+    await working_memory.store_in_memory(session_id, session)
     return {"status": "consolidating"}

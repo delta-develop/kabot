@@ -4,6 +4,7 @@ from typing import Any
 from sqlalchemy import and_
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import exists, text, tuple_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -66,6 +67,23 @@ class RelationalStorage(Storage):
         async with self._sessions()() as session:
             async with session.begin():
                 session.add_all(turns)
+
+    async def append_many(self, turns: list[Turn]) -> None:
+        """Writes turns to the log, skipping the ones already there.
+
+        Appending the same (session_id, seq) twice is a no-op: that pair is the
+        identity of a turn, and a consolidation retry replays the whole session.
+        `save_many` keeps rejecting duplicates, since outside a retry they are a
+        bug.
+        """
+        if not turns:
+            return
+        statement = pg_insert(Turn).on_conflict_do_nothing(
+            constraint="uq_turn_session_id_seq"
+        )
+        async with self._sessions()() as session:
+            async with session.begin():
+                await session.execute(statement, [turn.model_dump() for turn in turns])
 
     async def get(self, filters: dict[str, Any]) -> list[Turn]:
         async with self._sessions()() as session:

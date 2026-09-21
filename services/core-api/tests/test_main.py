@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from fastapi.routing import iter_route_contexts
 from fastapi.testclient import TestClient
 
@@ -58,7 +58,7 @@ def test_create_session_stores_open_document(mocker):
 
 
 @pytest.mark.asyncio
-async def test_close_queues_consolidation_and_exposes_status_lifecycle(mocker):
+async def test_close_queues_consolidation_without_touching_postgres(mocker):
     session = SessionDocument(
         subject_id="leo",
         turns=[],
@@ -76,47 +76,30 @@ async def test_close_queues_consolidation_and_exposes_status_lifecycle(mocker):
 
     working_memory.retrieve_from_memory.side_effect = retrieve
     working_memory.store_in_memory.side_effect = store
-    orchestrator = AsyncMock()
-    orchestrator.working_memory = working_memory
-
-    async def consolidate(_, session_id):
-        current = await working_memory.retrieve_from_memory(session_id)
-        current.status = "consolidated"
-        await working_memory.store_in_memory(session_id, current)
-
-    orchestrator.persist_conversation_closure.side_effect = consolidate
-    mocker.patch(
-        "app.api.routes.sessions.CognitiveOrchestrator.from_defaults",
-        return_value=orchestrator,
-    )
     mocker.patch("app.api.routes.sessions.WorkingMemory", return_value=working_memory)
-    background = BackgroundTasks()
+    enqueue = mocker.patch(
+        "app.api.routes.sessions.enqueue", new=AsyncMock(return_value="1-0")
+    )
+    sessions = mocker.patch(
+        "app.services.storage.relational_storage.RelationalStorage._sessions"
+    )
 
-    response = await close_session("session-id", background)
+    response = await close_session("session-id")
 
     assert response == {"status": "consolidating"}
-    assert len(background.tasks) == 1
-    assert background.tasks[0].func == orchestrator.persist_conversation_closure
+    enqueue.assert_awaited_once_with("session-id")
     assert (await get_session("session-id")).status == "consolidating"
-
-    await background()
-
-    assert (await get_session("session-id")).status == "consolidated"
-    orchestrator.persist_conversation_closure.assert_awaited_once_with(
-        "leo", "session-id"
-    )
+    sessions.assert_not_called()
 
 
 def test_close_returns_accepted(mocker):
     session = SessionDocument(
         subject_id="leo", turns=[], last_activity=datetime.now(UTC)
     )
-    orchestrator = AsyncMock()
-    orchestrator.working_memory.retrieve_from_memory.return_value = session
-    mocker.patch(
-        "app.api.routes.sessions.CognitiveOrchestrator.from_defaults",
-        return_value=orchestrator,
-    )
+    working_memory = AsyncMock()
+    working_memory.retrieve_from_memory.return_value = session
+    mocker.patch("app.api.routes.sessions.WorkingMemory", return_value=working_memory)
+    mocker.patch("app.api.routes.sessions.enqueue", new=AsyncMock(return_value="1-0"))
 
     response = TestClient(app).post("/sessions/session-id/close")
 
@@ -124,7 +107,7 @@ def test_close_returns_accepted(mocker):
     assert response.json() == {"status": "consolidating"}
 
 
-@pytest.mark.parametrize("session_status", ["consolidating", "consolidated"])
+@pytest.mark.parametrize("session_status", ["consolidating", "consolidated", "failed"])
 @pytest.mark.asyncio
 async def test_repeat_close_returns_conflict_without_side_effects(
     mocker, session_status
@@ -135,21 +118,45 @@ async def test_repeat_close_returns_conflict_without_side_effects(
         last_activity=datetime.now(UTC),
         status=session_status,
     )
+    working_memory = AsyncMock()
+    working_memory.retrieve_from_memory.return_value = session
+    mocker.patch("app.api.routes.sessions.WorkingMemory", return_value=working_memory)
+    enqueue = mocker.patch("app.api.routes.sessions.enqueue", new=AsyncMock())
+
+    with pytest.raises(HTTPException) as error:
+        await close_session("session-id")
+
+    assert error.value.status_code == 409
+    assert error.value.detail == f"Session is {session_status}"
+    working_memory.store_in_memory.assert_not_awaited()
+    enqueue.assert_not_awaited()
+
+
+@pytest.mark.parametrize("session_status", ["consolidating", "consolidated", "failed"])
+def test_chat_on_a_session_that_is_not_open_returns_conflict(mocker, session_status):
+    """A consolidated session cannot take turns: seq would restart at zero."""
+    session = SessionDocument(
+        subject_id="leo",
+        turns=[],
+        last_activity=datetime.now(UTC),
+        status=session_status,
+    )
+    working_memory = AsyncMock()
+    working_memory.retrieve_from_memory.return_value = session
+    mocker.patch("app.api.routes.sessions.WorkingMemory", return_value=working_memory)
     orchestrator = AsyncMock()
-    orchestrator.working_memory.retrieve_from_memory.return_value = session
     mocker.patch(
         "app.api.routes.sessions.CognitiveOrchestrator.from_defaults",
         return_value=orchestrator,
     )
-    background = BackgroundTasks()
 
-    with pytest.raises(HTTPException) as error:
-        await close_session("session-id", background)
+    response = TestClient(app).post(
+        "/sessions/session-id/chat", json={"message": "still here?"}
+    )
 
-    assert error.value.status_code == 409
-    assert error.value.detail == f"Session is {session_status}"
-    orchestrator.working_memory.store_in_memory.assert_not_awaited()
-    assert background.tasks == []
+    assert response.status_code == 409
+    assert "open a new session" in response.json()["detail"]
+    orchestrator.handle_incoming_message.assert_not_awaited()
 
 
 def test_get_session_reports_status_and_turn_count(mocker):
