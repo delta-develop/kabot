@@ -389,3 +389,69 @@ async def test_facts_cannot_forge_tags_either(memories):
     lines = facts.content.splitlines()
     assert len([line for line in lines if line.startswith("## ")]) == 1
     assert not [line for line in lines if line.startswith("User:")]
+
+
+@pytest.mark.asyncio
+async def test_the_reranker_decides_which_fragments_recall_can_afford(memories, mocker):
+    mocker.patch(
+        "app.services.memory.context_builder.get_embedding",
+        AsyncMock(return_value=VECTOR),
+    )
+    by_cosine = [
+        fragment("aguacate " * 250, datetime(2026, 1, 1, tzinfo=UTC), 0.9),
+        fragment("bicicleta " * 250, datetime(2026, 1, 2, tzinfo=UTC), 0.2),
+    ]
+    mocker.patch(
+        "app.services.memory.context_builder.rerank",
+        AsyncMock(return_value=list(reversed(by_cosine))),
+    )
+
+    context = await build(memories, 500, fragments=by_cosine)
+
+    recall = next(block for block in context.blocks if block.source == "recall")
+    assert "bicicleta" in recall.content
+    assert "aguacate" not in recall.content
+    assert context.used <= 500
+
+
+@pytest.mark.asyncio
+async def test_the_reranker_judges_the_message_not_the_enriched_query(memories, mocker):
+    mocker.patch(
+        "app.services.memory.context_builder.get_embedding",
+        AsyncMock(return_value=VECTOR),
+    )
+    rerank = mocker.patch(
+        "app.services.memory.context_builder.rerank",
+        AsyncMock(side_effect=lambda message, fragments: fragments),
+    )
+    fragments = [fragment("un recuerdo", datetime(2026, 1, 1, tzinfo=UTC), 0.9)]
+
+    await build(
+        memories,
+        2000,
+        turns=(draft(0, "hablemos de la cena"),),
+        fragments=fragments,
+        q="¿y eso?",
+    )
+
+    rerank.assert_awaited_once_with("¿y eso?", fragments)
+
+
+@pytest.mark.asyncio
+async def test_usefulness_travels_with_the_fragment_provenance(memories, mocker):
+    mocker.patch(
+        "app.services.memory.context_builder.get_embedding",
+        AsyncMock(return_value=VECTOR),
+    )
+    ranked = [fragment("un recuerdo", datetime(2026, 1, 1, tzinfo=UTC), 0.2)]
+    ranked[0].usefulness = 0.89
+    mocker.patch(
+        "app.services.memory.context_builder.rerank",
+        AsyncMock(return_value=ranked),
+    )
+
+    context = await build(memories, 2000, fragments=ranked)
+
+    recall = next(block for block in context.blocks if block.source == "recall")
+    assert [reference.usefulness for reference in recall.fragments or []] == [0.89]
+    assert [reference.similarity for reference in recall.fragments or []] == [0.2]

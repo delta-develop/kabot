@@ -4,13 +4,15 @@ from typing import Any
 
 from app.models.context import BlockSource, Context, ContextBlock, FragmentRef
 from app.models.session import SessionDocument, TurnDraft
-from app.models.turn import Fragment, Turn
+from app.models.turn import Fragment
 from app.prompts.conversation import (
     escape_markup,
+    render_turn,
     render_user_message,
     scaffolding_tokens,
 )
 from app.services.memory.memory import EpisodicLog, KeyedMemory
+from app.services.memory.reranker import rerank
 from app.utils.openai_utils import MAX_EMBEDDING_INPUT_BYTES, get_embedding
 from app.utils.token_utils import count_tokens
 
@@ -55,13 +57,6 @@ def build_recall_query(prev: TurnDraft | None, message: str) -> str:
     if not prefix:
         return message
     return f"{prefix}\n{message}"
-
-
-def render_turn(turn: TurnDraft | Turn) -> str:
-    return (
-        f"User: {escape_markup(turn.user_text)}\n"
-        f"Assistant: {escape_markup(turn.assistant_text)}\n"
-    )
 
 
 def render_fragment(fragment: Fragment) -> str:
@@ -138,6 +133,7 @@ def _recall_block(fragments: list[Fragment], left: int) -> ContextBlock | None:
                 session_id=fragment.session_id,
                 ts=fragment.ts,
                 similarity=fragment.similarity,
+                usefulness=fragment.usefulness,
                 seqs=[turn.seq for turn in fragment.turns],
             )
             for fragment, _ in admitted
@@ -197,7 +193,10 @@ async def assemble(
         fragments = await episodic_memory.similar(
             subject_id, vector, RECALL_K, session_id
         )
-        recall = _recall_block(fragments, left)
+        # Cosine decided which turns came back; the re-ranker decides which of
+        # them are worth the budget. It judges `q`, not the enriched query: the
+        # previous turn is there to fix the embedding, not to be answered.
+        recall = _recall_block(await rerank(q, fragments), left)
         if recall is not None:
             blocks["recall"] = recall
             left -= recall.tokens

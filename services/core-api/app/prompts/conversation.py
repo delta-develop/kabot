@@ -1,4 +1,6 @@
 from app.models.context import Context
+from app.models.session import TurnDraft
+from app.models.turn import Turn
 from app.utils.token_utils import count_tokens
 
 
@@ -38,6 +40,13 @@ def escape_markup(text: str) -> str:
     makes a multi-line answer visibly part of the turn it belongs to.
     """
     return text.replace("\n", "\n  ")
+
+
+def render_turn(turn: TurnDraft | Turn) -> str:
+    return (
+        f"User: {escape_markup(turn.user_text)}\n"
+        f"Assistant: {escape_markup(turn.assistant_text)}\n"
+    )
 
 
 def render_memory(context: Context) -> str:

@@ -3,6 +3,7 @@ import os
 import redis.asyncio as aioredis
 from openai import AsyncOpenAI
 from pymongo import AsyncMongoClient
+from typesafe_sdk import AsyncTypeSafeClient, RetryPolicy
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017/elephant")
@@ -17,6 +18,7 @@ REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "30"))
 _redis_client = None
 _mongo_client = None
 _openai_client = None
+_typesafe_client = None
 
 
 async def get_redis_client(redis_url=REDIS_URL):
@@ -64,3 +66,25 @@ async def get_openai_client():
         api_key = os.getenv("OPENAI_API_KEY")
         _openai_client = AsyncOpenAI(api_key=api_key)
     return _openai_client
+
+
+async def get_typesafe_client():
+    """Initialize and return a singleton TypeSafe client.
+
+    Returns:
+        AsyncTypeSafeClient: An asynchronous TypeSafe client instance.
+    """
+    global _typesafe_client
+    if _typesafe_client is None:
+        # The re-rank sits in the hot path of every chat turn and its fallback is
+        # the cosine order recall already had, so a dead service must cost close
+        # to nothing. Measured against the SDK defaults — 10 s per attempt, two
+        # retries — an outage costs 31.4 s per turn against the 215 ms the call
+        # takes when it answers. RetryPolicy's total budget stops the next
+        # attempt, it never cuts the one in flight, so the only real lever is
+        # timeout x (retries + 1): one attempt, 1.5 s.
+        _typesafe_client = AsyncTypeSafeClient(
+            timeout=1.5,
+            retry=RetryPolicy(max_retries=0),
+        )
+    return _typesafe_client

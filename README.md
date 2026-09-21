@@ -143,6 +143,12 @@ Nothing is truncated mid-sentence: a block goes in whole or stays out. `used` ne
 exceeds `budget`, and every block reports what it cost, so each response proves where
 its tokens went.
 
+pgvector returns the recall candidates by cosine similarity, which ranks a fragment
+by what it is about, and a TypeSafe re-rank then reorders them by whether they help
+answer this particular message; both numbers travel with every fragment as
+`similarity` and `usefulness`. If TypeSafe does not answer within 1.5 s, recall keeps
+the cosine order it already had and nothing else changes.
+
 Facts and recall do not compete. Facts are a summary that may be stale; dated turns
 are verbatim and take precedence, which is why fragment dates are visible in the
 prompt.

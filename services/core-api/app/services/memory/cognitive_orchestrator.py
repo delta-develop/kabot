@@ -4,13 +4,16 @@ from typing import Any, Sequence
 from app.models.context import Context, ContextBlock
 from app.models.session import SessionDocument, TurnDraft
 from app.models.turn import Turn
-from app.prompts.conversation import build_conversation_prompt, scaffolding_tokens
+from app.prompts.conversation import (
+    build_conversation_prompt,
+    render_turn,
+    scaffolding_tokens,
+)
 from app.services.llm.base import LLMBase
 from app.services.memory.context_builder import (
     DEFAULT_CONTEXT_BUDGET,
     WORKING_HEADER,
     assemble,
-    render_turn,
 )
 from app.services.memory.memory import EpisodicLog, KeyedMemory
 from app.utils.openai_utils import get_embeddings
