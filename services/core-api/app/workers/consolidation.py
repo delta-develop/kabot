@@ -31,7 +31,9 @@ MAX_RETRIES = int(os.getenv("CONSOLIDATION_MAX_RETRIES", "3"))
 SWEEP_INTERVAL = int(os.getenv("CONSOLIDATION_SWEEP_INTERVAL", "60"))
 SWEEP_MARGIN_SECONDS = int(os.getenv("CONSOLIDATION_SWEEP_MARGIN_SECONDS", "300"))
 BATCH = 10
+# Must stay under connections.REDIS_SOCKET_TIMEOUT; see the note there.
 BLOCK_MS = 5000
+RETRY_BACKOFF_SECONDS = 1
 
 logger = logging.getLogger(__name__)
 
@@ -156,13 +158,27 @@ async def sweep_once(working_memory: WorkingMemory) -> list[str]:
 async def consume_loop(
     orchestrator: CognitiveOrchestrator, working_memory: WorkingMemory, consumer: str
 ) -> None:
+    """Drains the stream forever, outliving the broker it reads from.
+
+    `consume_once` already isolates a failing session; what reaches here is the
+    stream itself failing. Letting that end the process stops consolidation for
+    every subject until someone notices, so the loop logs and retries instead.
+    Nothing is lost by retrying: an unacknowledged message stays pending.
+    """
     while True:
-        await consume_once(orchestrator, working_memory, consumer)
+        try:
+            await consume_once(orchestrator, working_memory, consumer)
+        except Exception:
+            logger.exception("Consolidation stream read failed; retrying")
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS)
 
 
 async def sweep_loop(working_memory: WorkingMemory) -> None:
     while True:
-        await sweep_once(working_memory)
+        try:
+            await sweep_once(working_memory)
+        except Exception:
+            logger.exception("Consolidation sweep failed; retrying")
         await asyncio.sleep(SWEEP_INTERVAL)
 
 

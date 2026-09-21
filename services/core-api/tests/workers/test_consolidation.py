@@ -1,7 +1,9 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
+import redis.exceptions
 
 from app.models.session import SessionDocument
 from app.workers import consolidation
@@ -146,3 +148,27 @@ async def test_messages_left_by_a_dead_worker_come_before_new_ones(stream):
     assert handled == 1
     stream["read_new"].assert_not_awaited()
     orchestrator.persist_conversation_closure.assert_awaited_once_with("leo", "stale")
+
+
+def test_block_window_stays_under_the_socket_read_timeout():
+    """redis-py times the socket read of XREADGROUP; losing that race kills the worker."""
+    from app.services.storage.connections import REDIS_SOCKET_TIMEOUT
+    from app.workers.consolidation import BLOCK_MS
+
+    assert BLOCK_MS / 1000 < REDIS_SOCKET_TIMEOUT
+
+
+@pytest.mark.asyncio
+async def test_a_stream_read_failure_does_not_end_the_worker(stream, mocker):
+    """A dead loop stops consolidation for every subject until someone notices."""
+    mocker.patch.object(consolidation.asyncio, "sleep", new=AsyncMock())
+    # CancelledError is a BaseException, so it escapes the guard and ends the loop.
+    stream["claim_stale"].side_effect = [
+        redis.exceptions.TimeoutError("Timeout reading from redis:6379"),
+        asyncio.CancelledError(),
+    ]
+
+    with pytest.raises(asyncio.CancelledError):
+        await consolidation.consume_loop(AsyncMock(), AsyncMock(), "worker-1")
+
+    assert stream["claim_stale"].await_count == 2
