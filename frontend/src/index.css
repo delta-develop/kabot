@@ -36,9 +36,17 @@ textarea {
 /* ── shell ───────────────────────────────────────────────────────────────── */
 
 .app {
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+/* The error strip renders conditionally. Positional grid rows would hand its
+   row to the panes whenever it is absent, which left the app not filling the
+   viewport and the composer floating mid-page. */
+.header,
+.error-strip {
+  flex-shrink: 0;
 }
 
 .header {
@@ -110,6 +118,7 @@ textarea {
 .panes {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  flex: 1;
   min-height: 0;
 }
 
@@ -152,8 +161,10 @@ textarea {
 /* ── conversation ────────────────────────────────────────────────────────── */
 
 .chat-pane {
-  justify-content: space-between;
   gap: 16px;
+  /* Overrides .pane: the transcript scrolls, the pane does not, so the composer
+     stays pinned to the bottom however many messages there are. */
+  overflow: hidden;
 }
 
 .transcript {
@@ -162,6 +173,7 @@ textarea {
   flex-direction: column;
   gap: 16px;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .bubble {
@@ -190,6 +202,7 @@ textarea {
 }
 
 .composer {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;

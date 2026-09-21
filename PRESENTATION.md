@@ -8,6 +8,11 @@ Everything that goes on a slide is written out below. Nothing points at another 
 - **SAY** — spoken, not on screen. Goes in the speaker notes.
 - **IF ASKED** — the answer to the question this slide provokes. Not on the slide.
 
+**The deck is already built.** `presentation.html` at the repository root is the same
+content, ready to present: open it in a browser, arrow keys to move, `N` for speaker
+notes, `F` for full screen, and ⌘P prints it to PDF one slide per page. It needs no
+network. This file stays as the source the deck was written from.
+
 **The demo runbook is not in this file.** It is in `DEMO-SCRIPT.md` — hold that one open
 on a second screen; nothing in it belongs on a slide.
 

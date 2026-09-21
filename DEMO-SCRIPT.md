@@ -6,6 +6,124 @@ this is the thing you read from while the room watches the screen.
 **Where it sits:** between slide 3 (*One endpoint, one question*) and slide 4 (*What you
 just saw*). One excursion to the browser, at minute two, back once, never again.
 
+## ⚠ FIRST, ON THE MACHINE YOU WILL PRESENT FROM
+
+Run these in this order. The whole thing takes about five minutes, most of it the seed.
+
+```bash
+git pull                              # 1 · get the latest fixes
+
+./examples/reset-demo.sh              # 2 · wipe, rebuild, restart, seed
+```
+
+Then **hard-refresh the browser** (`Cmd+Shift+R`) so it picks up the rebuilt bundle, and
+open the console at `http://localhost:8003`.
+
+`reset-demo.sh` is the start-over button. It destroys the Postgres and Mongo volumes and
+everything Redis holds, **rebuilds the images so a `git pull` actually takes effect**,
+brings the stack back up, waits for the API and re-seeds. It does not touch `.env` and it
+does not go through `.superset/teardown.sh`, so **the reserved port block survives** — the
+console stays on the port this page says it is on.
+
+```bash
+./examples/reset-demo.sh                 # wipes everything, seeds `leo`
+SUBJECT=demo ./examples/reset-demo.sh    # a different subject
+SKIP_BUILD=1 ./examples/reset-demo.sh    # faster, when no code changed
+```
+
+Run it again any time the demo data gets muddled — between rehearsals, after a bad run,
+or if somebody typed into the wrong subject.
+
+### If you only need the memory back
+
+The stack is fine and you just want clean data:
+
+```bash
+curl -X DELETE http://localhost:8000/subjects/leo
+./examples/seed-demo.sh
+```
+
+No downtime, no rebuild, about three minutes.
+
+---
+
+## ⚠ IT IS NOT IN THE REPOSITORY
+
+**The demo memory lives in Docker volumes, not in this repository.** A different machine —
+or this one after `docker compose down -v` — starts with an empty database, and every
+answer comes back generic because there is genuinely nothing to remember.
+
+On the presenting machine, once:
+
+```bash
+./examples/seed-demo.sh          # ~3 minutes · needs OPENAI_API_KEY in .env
+```
+
+Run it with **no `SUBJECT=` prefix**. It seeds `leo`, which is the console's default
+subject, so the field never has to be touched.
+
+It prints the facts when it finishes. **`"diet": "Vegetarian…"` means it worked.**
+
+### ⚠ The numbers below are shapes, not values
+
+Every seeding runs the model again, so the facts and the summary come out worded slightly
+differently and **the token counts and scores will not match this page exactly.** Two
+seedings of the same twelve messages produced `used 944` and `used 876`.
+
+**Never read a number off this page out loud. Read it off the screen.** What has to hold
+is the shape:
+
+- three blocks on the first message, four from the second
+- the beef-broth fragment carries the **highest usefulness** of the block
+- the distractors sit near zero
+- `used` comes in under `budget`
+
+If the shape holds, the demo works, whatever the digits say.
+
+### The console tells you when this is the problem
+
+The context pane says, in words:
+
+```
+nothing remembered about this subject yet
+FACTS    not included this turn
+SUMMARY  not included this turn
+RECALL   not included this turn
+```
+
+That is not a failure of the system — it is the system reporting, accurately, that this
+subject has no history. Run the seed.
+
+---
+
+## ⚠ RESET BEFORE EVERY RUN — including every rehearsal
+
+**Beat 5 leaves the console on an empty subject.** If you start again without undoing it,
+every answer comes back generic and it looks like the system failed. It has not — you are
+talking to somebody it has never met.
+
+Before every single run, including the real one:
+
+1. **Subject field reads `leo`.** Clear whatever is there, type it, **press Enter.**
+2. Budget slider at **2000**.
+3. Click **new session**.
+
+Both `leo` and `demo` are seeded with identical memory. `leo` is the console's default, so
+a page refresh lands somewhere that works.
+
+### The check that catches it, 3 seconds in
+
+After the first message of beat 1, the right-hand pane **must show three blocks**:
+`facts`, `summary`, `recalled`.
+
+- **Three blocks → you are fine.** Carry on.
+- **No blocks, or the assistant asks "what city, what cuisine, any dietary
+  restrictions?" → wrong subject.** That question is the signature of an empty memory.
+  Fix the field, press Enter, click new session, resend. Ten seconds, no explanation
+  needed.
+
+---
+
 ## The three paste blocks, up front
 
 **Paste 1 — the dinner question.** Used in beat 1 and again in beat 5.
@@ -33,9 +151,11 @@ I'm thinking of travelling abroad next month. Anything I should sort out first?
 ### BEFORE THE ROOM IS WATCHING
 
 1. Console open at `http://localhost:8003`
-2. **Subject field: `demo`** — press Enter to commit it
+2. **Subject field: `leo`** — press Enter to commit it. It is the default, but commit it
+   anyway; the field does nothing until Enter or blur.
 3. Budget slider at **2000**
-4. Have this file open on a second screen or phone for the paste blocks
+4. Click **new session**
+5. This file open on a second screen or phone for the paste blocks
 
 ---
 
@@ -55,18 +175,19 @@ I'm putting together a dinner for six people this Thursday. Any suggestions on w
 
 **STOP before the answer arrives.** Point at the right pane.
 
-> "This is what the model is about to receive. Three blocks, each priced in tokens. 944 of
-> a 2000 budget. The one called `recalled` is a conversation from weeks ago that the
+> "This is what the model is about to receive. Three blocks, each priced in tokens. roughly half
+> of a 2000 budget. The one called `recalled` is a conversation from weeks ago that the
 > system decided was worth paying for."
 
 **Read the beef-broth fragment out loud.** Then:
 
 > "Nobody ever filled in a form that says *vegetarian*. He mentioned it once, complaining
-> about a restaurant, and that sentence is what came back. Similarity 0.35, usefulness
-> 0.79 — hold on to those two numbers."
+> about a restaurant, and that sentence is what came back. Read the two scores off the screen — similarity around a third,
+> usefulness near eight in ten. Hold on to those two numbers."
 
-*(Verified: `facts 210 · summary 258 · recall 476 · used 944`. Broth `0.3513 / 0.79`;
-distractors `0.06` and `0.03`.)*
+*(One observed run: `facts 210 · summary 258 · recall 476 · used 944`, broth `0.3513 / 0.79`.
+Another, same twelve messages: `used 876`, broth `0.3355 / 0.77`. Same shape, different
+digits — read yours off the screen.)*
 
 ---
 
@@ -163,8 +284,13 @@ I'm thinking of travelling abroad next month. Anything I should sort out first?
 > the last three minutes was memory about one individual, and it did not exist for this
 > one."
 
-*(Verified: `used 0/2000`, no blocks. Any unused subject name works; the subject is
-created implicitly.)*
+*(Verified: `used 0/2000`, no blocks — and the reply is a giveaway: "What city or
+neighborhood are you considering, and what kind of food or atmosphere would suit the
+group?" That is what no memory sounds like.)*
+
+**→ IMMEDIATELY AFTER, before you turn back to the deck:** set the subject field back to
+**`leo`**, press Enter, click new session. It takes three seconds and it is the difference
+between a clean second run and a demo that looks broken.
 
 ---
 
