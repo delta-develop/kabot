@@ -8,6 +8,47 @@ just saw*). One excursion to the browser, at minute two, back once, never again.
 
 ## ⚠ FIRST, ON THE MACHINE YOU WILL PRESENT FROM
 
+Run these in this order. The whole thing takes about five minutes, most of it the seed.
+
+```bash
+git pull                              # 1 · get the latest fixes
+
+./examples/reset-demo.sh              # 2 · wipe, rebuild, restart, seed
+```
+
+Then **hard-refresh the browser** (`Cmd+Shift+R`) so it picks up the rebuilt bundle, and
+open the console at `http://localhost:8003`.
+
+`reset-demo.sh` is the start-over button. It destroys the Postgres and Mongo volumes and
+everything Redis holds, **rebuilds the images so a `git pull` actually takes effect**,
+brings the stack back up, waits for the API and re-seeds. It does not touch `.env` and it
+does not go through `.superset/teardown.sh`, so **the reserved port block survives** — the
+console stays on the port this page says it is on.
+
+```bash
+./examples/reset-demo.sh                 # wipes everything, seeds `leo`
+SUBJECT=demo ./examples/reset-demo.sh    # a different subject
+SKIP_BUILD=1 ./examples/reset-demo.sh    # faster, when no code changed
+```
+
+Run it again any time the demo data gets muddled — between rehearsals, after a bad run,
+or if somebody typed into the wrong subject.
+
+### If you only need the memory back
+
+The stack is fine and you just want clean data:
+
+```bash
+curl -X DELETE http://localhost:8000/subjects/leo
+./examples/seed-demo.sh
+```
+
+No downtime, no rebuild, about three minutes.
+
+---
+
+## ⚠ IT IS NOT IN THE REPOSITORY
+
 **The demo memory lives in Docker volumes, not in this repository.** A different machine —
 or this one after `docker compose down -v` — starts with an empty database, and every
 answer comes back generic because there is genuinely nothing to remember.
