@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elephant</title>
+<style>
+:root{
+  --ink:#16150f; --muted:#6b675c; --line:#d9d4c7; --bg:#faf8f3; --surface:#fff;
+  --accent:#a8500f; --good:#2f6b3a;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --prose:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#111;font-family:var(--prose);color:var(--ink)}
+#stage{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+.slide{
+  display:none;width:min(100vw,calc(100vh * 16 / 9));height:min(100vh,calc(100vw * 9 / 16));
+  background:var(--bg);padding:5.2vmin 6vmin;flex-direction:column;justify-content:center;
+  container-type:size;
+}
+.slide.on{display:flex}
+h1{font-size:7.2cqh;line-height:1.05;margin:0 0 2cqh;letter-spacing:-.02em}
+h2{font-size:5.4cqh;line-height:1.12;margin:0 0 3cqh;letter-spacing:-.015em}
+h2 .q{color:var(--accent)}
+p{font-size:3.1cqh;line-height:1.45;margin:0 0 1.6cqh;max-width:60ch}
+p.lede{font-size:3.7cqh;color:var(--muted)}
+strong{font-weight:650}
+em{font-style:italic}
+.kicker{font-family:var(--mono);font-size:2.1cqh;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:2.4cqh}
+pre{font-family:var(--mono);font-size:2.55cqh;line-height:1.5;background:var(--surface);
+  border:1px solid var(--line);border-radius:4px;padding:2cqh 2.2cqh;margin:1.4cqh 0;overflow:hidden}
+pre b{color:var(--accent);font-weight:600}
+pre .g{color:var(--good)}
+code{font-family:var(--mono);font-size:.92em;background:var(--surface);border:1px solid var(--line);
+  border-radius:3px;padding:.06em .32em}
+table{border-collapse:collapse;font-size:2.6cqh;margin:1.4cqh 0;width:100%}
+th{text-align:left;font-family:var(--mono);font-size:2.05cqh;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;padding:.7cqh 1.4cqh .7cqh 0;border-bottom:1px solid var(--line)}
+td{padding:.82cqh 1.4cqh .82cqh 0;border-bottom:1px solid var(--line);vertical-align:top}
+tr.hi td{background:#f2ece0;font-weight:600}
+.big{font-size:9cqh;line-height:1;font-family:var(--mono);letter-spacing:-.03em;margin:1cqh 0}
+.big small{font-size:.32em;color:var(--muted);letter-spacing:0;font-family:var(--prose)}
+.punch{font-size:4.1cqh;line-height:1.25;margin-top:2.4cqh;border-left:3px solid var(--accent);padding-left:2.2cqh}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:3.4cqh;align-items:start}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:2.4cqh}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1.8cqh}
+.card h3{font-family:var(--mono);font-size:2.1cqh;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 1cqh;font-weight:600}
+.card p{font-size:2.5cqh;margin:0}
+.flow{display:flex;align-items:center;gap:1.1cqh;flex-wrap:wrap;margin:2cqh 0;font-size:2.4cqh}
+.node{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1.3cqh 1.6cqh;flex:1;min-width:0}
+.node b{display:block;font-family:var(--mono);font-size:2cqh;color:var(--accent);margin-bottom:.4cqh}
+.arrow{color:var(--muted);font-size:2.8cqh}
+.back{margin-top:1cqh;font-family:var(--mono);font-size:2.1cqh;color:var(--muted);text-align:center}
+ul{margin:1cqh 0;padding-left:2.4cqh;font-size:2.85cqh;line-height:1.45}
+li{margin-bottom:1.2cqh;max-width:62ch}
+.demo{background:#16150f;color:#faf8f3;justify-content:center;align-items:center;text-align:center}
+.demo h2{color:#faf8f3;font-size:6cqh}
+.demo p{color:#b9b3a4;font-size:3.4cqh}
+.appx{background:#f2efe7}
+.appx .kicker{color:var(--accent)}
+#hud{position:fixed;right:1.1rem;bottom:.8rem;font-family:var(--mono);font-size:12px;color:#8c8778;z-index:9}
+#notes{position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;background:#1b1a15;color:#e6e1d3;
+  font-size:14px;line-height:1.5;padding:14px 20px;display:none;z-index:8;border-top:2px solid var(--accent)}
+#notes.on{display:block}
+#notes b{color:#e2953f}
+@media print{
+  html,body{background:#fff}
+  #stage{position:static;display:block}
+  .slide{display:flex!important;width:100%;height:100vh;page-break-after:always;border:0}
+  #hud,#notes{display:none!important}
+}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="hud"></div>
+<div id="notes"></div>
+<script>
+const S = [
+{n:"", h:`<h1>Elephant</h1><p class="lede">Memory as a service.</p>
+<p style="font-size:3.4cqh">A brain that only knows how to talk.</p>`,
+note:"Fifteen seconds. Name, one line, move. Do not explain the name."},
+
+{n:"01 · where it came from", h:`<h2>What this was</h2>
+<p><strong>May 2025.</strong> A conversational assistant for a used-car marketplace, built in three days as a technical challenge. It already had four kinds of memory, modelled on the brain.</p>
+<p>It also had a hardcoded <code>if/elif</code> chain that classified every message and routed it:</p>
+<pre>IntentionHandler
+  ├── SearchHandler    vector search over the car catalogue
+  ├── FinanceHandler   financing calculations
+  ├── InfoHandler      company information
+  └── ExitHandler      persist the conversation, clear the cache</pre>
+<p><strong>September 2026.</strong> The domain came out — search, financing, company information, the intent chain. All deleted.</p>
+<p class="punch">What was left was the part that was actually interesting.</p>`,
+note:"The original design was proudest of the orchestrator — a central brain routing intentions. <b>I deleted it</b>, because deciding what to DO with a message is domain knowledge, and domain knowledge does not belong in a memory engine. That decision turned a chatbot for one company into something any company could use.<br><br>What survived is in the code today with the same names: working, summary, fact, episodic memory. <b>The good idea was there in 2025. It was buried under a car dealership.</b>"},
+
+{n:"02 · the product", h:`<h2>One endpoint, <span class="q">one question</span></h2>
+<p class="lede">Elephant stores conversations, compresses them, and answers one question on demand:</p>
+<p style="font-size:4.2cqh;line-height:1.3"><em>A message is about to arrive. What should I put in the prompt, without exceeding N tokens?</em></p>
+<pre>GET /sessions/{id}/context?q=&lt;the message&gt;&amp;budget=2000</pre>
+<p><strong>That endpoint is the product.</strong> It does not know what business it serves.</p>`,
+note:"The model is a commodity. What you HAND the model is not, and that is where the cost and the quality both live.<br><br>Remembering is not a storage problem — storage is cheap and solved. It is a <b>choosing</b> problem, and choosing under a budget is what this answers.<br><br>→ <b>\"I'm going to show it before I explain it.\"</b> Switch to the browser."},
+
+{n:"", cls:"demo", h:`<h2>Three conversations already happened.</h2>
+<p>Watch the right-hand pane — it shows the context <em>before</em> the answer.</p>`,
+note:"<b>SUBJECT: leo · BUDGET: 2000 · click ⟲ new</b><br><br><b>Beat 1</b> paste the dinner question → STOP before the answer → read the beef-broth fragment out loud → let the answer land → point at the two scores.<br><b>Beat 2</b> paste the follow-up → the fourth slot appears.<br><b>Beat 3</b> slider 800 → 600 → 400 → back to 2000.<br><b>Beat 4</b> paste the travel question → different memory.<br><b>Beat 5</b> subject → newhire → same dinner question → zero blocks. <b>Then set it back to leo.</b><br><br>Close: \"Nothing I typed mentioned a diet, or a passport.\""},
+
+{n:"03 · what you just saw", h:`<h2>Four layers, one question</h2>
+<p>Not four features — four answers to <em>how do I spend fewer tokens without forgetting?</em></p>
+<table>
+<tr><th>Layer</th><th>Its answer</th><th>Store</th></tr>
+<tr><td><strong>Working</strong></td><td>the last turns go in verbatim — few and cheap</td><td>Redis</td></tr>
+<tr><td><strong>Facts</strong></td><td>what endures is extracted and kept small</td><td>MongoDB</td></tr>
+<tr><td><strong>Summary</strong></td><td>the middle is compressed into prose</td><td>MongoDB</td></tr>
+<tr><td><strong>Episodic</strong></td><td>the rest is archived and <strong>indexed</strong>, so only what applies comes back</td><td>Postgres + pgvector</td></tr>
+</table>
+<p class="punch">The invariant: <code>used</code> never exceeds <code>budget</code>. Ever.</p>`,
+note:"Three stores because there are three access patterns, not for show. Redis is volatile and ordered and thrown away. Mongo replaces whole documents. Postgres holds a log that only grows and has to be searched by meaning.<br><br>The budget is spent by priority — facts, summary, working, recall — and read in a different order, with recall before the live conversation so the model reads it as background rather than as what just happened."},
+
+{n:"04 · the measurement that killed a feature", h:`<h2>The turn that mattered <span class="q">scored lowest</span></h2>
+<p>The design called for a similarity floor: discard retrieved turns below a minimum score.</p>
+<pre>relevant   [0.2634, 0.3664]
+noise      [0.2711, 0.3460]</pre>
+<p><strong>The ranges overlap completely.</strong> The best distractor beats two of the four relevant turns.</p>
+<p>For <em>"a dinner for six people — any suggestions?"</em>, the most useful turn in the corpus —
+<strong>"I've been vegetarian for about a year"</strong> — scored <strong>lowest of everything</strong>, below all noise.</p>
+<p>Meanwhile <em>"the commute to the office is killing me"</em> scored near the top, because it shares "work" semantics with the question.</p>`,
+note:"<b>This is the slide I would keep if I could only keep one.</b><br><br>The fragment you just watched arrive is the fragment that, by the metric everybody uses for this, looked like the WORST candidate in the corpus. If I had shipped the floor the design called for, the demo you just saw would not work.<br><br>I did not discover that by reasoning about it. I discovered it by measuring it, and <b>the measurement killed the feature</b>."},
+
+{n:"05 · not a resolution problem", h:`<h2>A better model does not fix it</h2>
+<p>Same measurement, different corpus, different language, three embedding models:</p>
+<pre>text-embedding-3-small  1536    separation  <b>-0.1639</b>
+text-embedding-3-large  1536    separation  <b>-0.1250</b>
+text-embedding-3-large  3072    separation  <b>-0.1227</b></pre>
+<p class="punch">Cosine similarity measures what a passage is <em>about</em>, not whether it <em>answers the question</em>.</p>
+<p style="margin-top:2cqh"><code>RECALL_MIN_SIMILARITY = -1.0</code> — the floor is off. What bounds the cost is the budget ceiling, not a relevance threshold.</p>`,
+note:"The obvious next move when a metric underperforms is to buy a better metric. Twice the dimensions, the larger model — it moves the number by four hundredths and the ranges still overlap.<br><br>That is the moment <b>the problem changes shape</b>. It is not that the signal is noisy. It is that it is the WRONG SIGNAL, and no amount of resolution fixes a wrong signal."},
+
+{n:"06 · the second ranking", h:`<h2>Cosine ranks the topic.<br>A noul ranks <span class="q">the help</span>.</h2>
+<p>A second pass asks a different question of each candidate: <em>would putting this excerpt in front of the assistant change or improve its reply?</em></p>
+<div class="two">
+<div><p style="font-size:2.5cqh;color:var(--muted)">clean corpus</p>
+<pre>sim 0.3466  useful <b>0.77</b>  broth
+sim 0.1760  useful <b>0.03</b>  distractor</pre></div>
+<div><p style="font-size:2.5cqh;color:var(--muted)">polluted corpus</p>
+<pre>sim <b>0.7621</b>  useful 0.64  the echo
+sim 0.3384  useful <b>0.88</b>  the answer</pre></div>
+</div>
+<p class="punch">Cosine ranked the echo of the question highest. The noul ranked the fact that answers it highest.</p>`,
+note:"Only the order changes. <b>Nothing is filtered</b> — a threshold needs a distribution that does not exist yet, and the budget ceiling already decides who gets cut.<br><br>One more thing: this dependency is <b>allowed to fail</b>. With the key unset, or the service slow past 1.5 seconds, recall keeps its cosine order, every fragment reports usefulness null, and nothing else changes. Somebody who clones this repo with nothing but an OpenAI key gets a working system."},
+
+{n:"07 · unit economics", h:`<h2>What that costs</h2>
+<div class="two">
+<div>
+<p style="font-size:2.5cqh;color:var(--muted)">one session, measured end to end</p>
+<pre>input        61.2%
+output       31.8%  <b>← 32% of cost,
+                      6% of tokens</b>
+re-rank       6.1%
+embeddings    0.8%</pre>
+</div>
+<div>
+<p style="font-size:2.5cqh;color:var(--muted)">per user, by how much they use it</p>
+<pre>safety companion    $ 0.27 /yr
+daily assistant     $ 1.03 /yr
+<b>support agent       $ 2.51 /yr</b>
+power user          $ 5.91 /yr</pre>
+</div></div>
+<p class="punch">At 10,000 heavy users: <strong>$2,267 a month · $2.72 per user per year.</strong><br>92% of it the API bill. The crossover is 831 users.</p>`,
+note:"Two things about how this was built, because the number is worthless without them.<br><br>First, <b>I made the baseline the HEAVY profile on purpose</b> — somebody who talks to it every working day, fourteen turns at a time. A flattering usage assumption produces a number that collapses the moment somebody asks <i>how often</i>.<br><br>Second, cost per user is meaningless without a denominator. Below 831 users you are paying for an idle cluster and the answer to \"how do I cut costs\" is <i>get more users</i>. Above it, infrastructure is noise and the only lever is tokens per message — which is the lever this system exposes as a request parameter.<br><br>It excludes dev and staging, backups, observability, multi-AZ, and every human being involved, who costs more than all of it combined."},
+
+{n:"08 · what the ceiling buys", h:`<h2>What the ceiling buys</h2>
+<p>The same user with no budget — the whole history in every prompt:</p>
+<pre>month | naive in/msg | naive $/mo | layered $/mo
+------+--------------+------------+-------------
+    1 |       14,578 | $    0.944 | <b>$     0.2093</b>
+    6 |      159,184 | $    9.852 | <b>$     0.2093</b>
+   12 |      332,711 | $   20.541 | <b>$     0.2093</b>
+   24 |      679,765 | $   41.919 | <b>$     0.2093</b></pre>
+<p><strong>Month 6 is 47×. Month 12 is 98×. Month 24 is 200×</strong>, and still climbing.</p>
+<p class="punch">The column that matters is not the money. <code>naive in/msg</code> grows without bound — it eventually stops fitting in any context window and simply fails.</p>`,
+note:"The flat column is flat <b>because it was chosen</b>. It stays flat for somebody with ten years of history.<br><br>That is the cost/benefit in one line: it converts an unbounded, silently growing cost into a constant that the caller picks per request — and it proves the constant on every response.<br><br>And the honest part: <b>at month one the difference is under 2×.</b> At demo scale this architecture saves nothing. If I had run the benchmark on the demo corpus and reported a saving, I would have been measuring the size of the corpus, not the design."},
+
+{n:"09 · the boundary", h:`<h2>Memory is not knowledge</h2>
+<div class="two" style="gap:2.4cqh">
+<div class="card"><h3>your service — owns the domain</h3>
+<p>the channel · your business logic · rules, prices, decisions<br><br><strong>your truth:</strong> catalogue, inventory, policies<br><strong>your side effects:</strong> bookings, orders, payments</p></div>
+<div class="card" style="border-color:var(--accent)"><h3>Elephant — owns the conversation</h3>
+<p><code>GET /context</code><br>the best context under N tokens<br><br><strong>four layers of memory</strong> about this person</p></div>
+</div>
+<p class="punch">Memory is what was said. Knowledge is what is true.<br>Whoever owns the side effect owns the loop.</p>`,
+note:"Elephant can tell you this person is vegetarian and was disappointed by a place in Roma Norte. It does not know which restaurants exist, what they cost, or whether a table is free on Thursday. <b>That is your database, and it stays yours.</b><br><br>Booking a table changes the world, so the service that can book it drives the conversation and calls this as one input among several. Elephant never calls out, never decides, never acts.<br><br>IF ASKED how this differs from an assistant that stores preferences: <b>the context comes back AS DATA</b>, before anything is done. A booking flow can refuse to proceed if the accessibility fact is not in the response. That is a check a program runs and a test covers."},
+
+{n:"10 · where it plugs in", h:`<h2>AlertMedia</h2>
+<div class="flow">
+<div class="node"><b>a threat fires</b>near a city</div><span class="arrow">→</span>
+<div class="node"><b>AlertMedia</b>who is affected?<br>GPS · geofences · itineraries</div><span class="arrow">→</span>
+<div class="node" style="border-color:var(--accent)"><b>Elephant</b>what do I know<br>about this one person?</div><span class="arrow">→</span>
+<div class="node"><b>the notification</b>that actually goes out</div>
+</div>
+<p class="back">↑ their reply, in free text — <code>POST /chat</code> — closes the loop back into memory</p>
+<table style="margin-top:1.4cqh">
+<tr><th>Shipped AI capability</th><th>Who it serves</th><th>Direction</th></tr>
+<tr><td>AI Assistant <span style="color:var(--muted)">Feb 2025</span></td><td>security and resilience teams</td><td>outward</td></tr>
+<tr><td>Risk Intelligence · Real-Time Signals</td><td>the organization</td><td>outward</td></tr>
+<tr><td>Social Intelligence</td><td>the organization</td><td>outward</td></tr>
+<tr><td>Analytics <span style="color:var(--muted)">May 2026</span></td><td>administrators</td><td>upward</td></tr>
+</table>
+<p class="punch">Four systems that look outward. This is the one that looks inward.</p>`,
+note:"Everything they hold about a person is structured and describes the present: GPS every twenty seconds, geofences, itineraries, check-ins, HRIS attributes, incident history.<br><br><b>The bridge is already in the product, and it is currently write-only.</b> They already collect free text from employees — two-way replies, session notes, incident reports. Today that text is read once and then it is a row. It is never asked a question.<br><br>Picture an itinerary that puts somebody in a city where a threat just fired. They know where the person is and how to reach them, and their AI Assistant drafts an excellent notification in seconds. What no part of that stack knows is that the same employee wrote, eleven months ago, that they got badly ill after eating near their hotel in that district — and mentioned, in a different incident, that they do not drive at night.<br><br><b>Those sentences are already in the building. They just have nowhere to live.</b>"},
+
+{n:"11 · honest limits", h:`<h2>Where it breaks</h2>
+<p class="lede">A design document without this section is a brochure.</p>
+<ul>
+<li><strong>Facts and recall can say the same thing twice.</strong> The prompt pays for both. Cross-layer deduplication is real, and not worth its cost at this scope.</li>
+<li><strong>Retrieval is single-hop.</strong> <em>"What did I say about the place my sister recommended?"</em> needs two memories connected.</li>
+<li><strong>The episodic index is only written at session close.</strong> The live conversation is not retrievable by meaning.</li>
+<li><strong>Consolidation is nearly-exactly-once.</strong> Only the turn log is idempotent. Degraded, never corrupted, no turn lost.</li>
+<li><strong>Contradictions resolve by an ordering rule</strong>, not a temporal knowledge graph — <em>strictly worse than what Zep does</em>, and the right trade at this scope.</li>
+</ul>`,
+note:"I would rather say these than be asked them. Each one is a decision with a reason, not an oversight, and <b>the last one names a competitor who does it better</b>."},
+
+{n:"12 · what is moving", h:`<h2>What is already moving</h2>
+<div class="cols3">
+<div class="card"><h3>MongoDB comes out</h3><p>Inherited. Two documents per subject, by key, written whole — Postgres <code>JSONB</code> in a store already there. It also removes a second connection pool, failure mode and backup policy.</p></div>
+<div class="card"><h3>It shards cleanly</h3><p>No query crosses a subject. <code>subject_id</code> is a perfect shard key — <strong>and it was not chosen to be one.</strong> Luck as much as foresight.</p></div>
+<div class="card" style="border-color:var(--accent)"><h3>The forget filter</h3><p>Not built. Not because of the model — because <strong>discarding a turn is irreversible</strong> and there is no measured threshold to discard one at.</p></div>
+</div>
+<p class="punch">I did not bring a finished product, and that is deliberate.<br>A system I could not criticise would mean I had stopped looking at it.</p>`,
+note:"Ranked by how soon they matter. The first is work I am doing. The second is a property I NOTICED rather than designed, which is worth admitting out loud. The third is a promise the original design made that I have not kept — and I would rather leave it unkept than invent a threshold that silently loses somebody's memory.<br><br><b>Stop here. This is the close.</b>"},
+
+{n:"appendix", cls:"appx", h:`<h2>Appendix</h2>
+<p class="lede">Not presented. Opened only if asked.</p>
+<table>
+<tr><th>Slide</th><th>For the question</th></tr>
+<tr><td>How it runs</td><td><em>how does it actually run?</em></td></tr>
+<tr><td>Spending order</td><td><em>how do you decide what fits?</em></td></tr>
+<tr><td>Consolidation</td><td><em>why is the worker separate?</em></td></tr>
+<tr><td>Five green test suites</td><td><em>how do you know your tests are worth anything?</em></td></tr>
+<tr><td>The full cost model</td><td><em>where does that number come from?</em></td></tr>
+<tr><td>Where this sits</td><td><em>what about Mem0, Zep, Letta?</em></td></tr>
+</table>`, note:"Navigate with arrow keys. These are for Q&A."},
+
+{n:"appendix · architecture", cls:"appx", h:`<h2>How it runs</h2>
+<div class="flow">
+<div class="node"><b>consumers</b>console · your app</div><span class="arrow">→</span>
+<div class="node"><b>core-api</b>every request,<br>and nothing else</div><span class="arrow">→</span>
+<div class="node"><b>Redis</b>the live session,<br>then the stream</div><span class="arrow">→</span>
+<div class="node"><b>consolidator</b>no requests, ever</div><span class="arrow">→</span>
+<div class="node"><b>Mongo · Postgres</b>the only writer</div>
+</div>
+<p class="back">↑ read back as context on the next request — memory is a loop, not a pile</p>
+<p style="margin-top:2cqh"><code>core-api</code> answers requests and writes only the live session. The <code>consolidator</code> answers nothing and is the only thing that writes long-term memory.</p>
+<p>One deliberate exception: <code>DELETE /subjects/{id}</code> erases across all four layers from the API, because an erasure request has to be synchronous and confirmable.</p>`, note:""},
+
+{n:"appendix · the budget", cls:"appx", h:`<h2>Spending order is not reading order</h2>
+<pre>spent by priority   facts → summary → working → recall
+rendered to read    facts · summary · recall · working · &lt;the message&gt;</pre>
+<p>Nothing is truncated mid-sentence — a block goes in whole or stays out.</p>
+<div class="two">
+<div class="card"><h3>working memory STOPS</h3><p>at the first turn that does not fit. Recency is an order; skipping a turn breaks the continuity that makes it worth reading.</p></div>
+<div class="card"><h3>recall SKIPS</h3><p>and keeps going. Relevance is not an order, so a later, smaller fragment can still fit.</p></div>
+</div>
+<pre>budget 2000 → facts 210 · summary 258 · recall 476
+budget  800 → facts 210 · summary 258 · recall <b>272</b>
+budget  600 → facts 210 · summary 258
+budget  400 → facts 210
+budget  200 → nothing fits</pre>`, note:""},
+
+{n:"appendix · the sleep phase", cls:"appx", h:`<h2>Consolidation is the sleep phase</h2>
+<p>Closing a session returns <code>202</code> and enqueues on a Redis stream. A separate worker embeds the turns in one batch, writes them to Postgres, merges the summary, extracts the facts, and <strong>only then acknowledges</strong>.</p>
+<p>Same division of labour the brain makes: during sleep, consolidation filters the day's experiences. Running it out of process is what lets an API restart and a consolidation survive each other.</p>
+<p>A sweep catches sessions that go quiet without ever being closed — <strong>one path, two triggers</strong>: it enqueues on the same stream, so a session nobody closed and a session closed politely travel identical code.</p>`, note:""},
+
+{n:"appendix · tests", cls:"appx", h:`<h2>Five defects, five green test suites</h2>
+<table>
+<tr><th>Defect</th><th>What the test verified</th></tr>
+<tr><td><code>/search</code> raised <code>NameError</code> on every call</td><td>nothing — no test exercised the path</td></tr>
+<tr><td><code>sanitize_message</code> was <code>return message</code></td><td>a test asserted a <code>&lt;script&gt;</code> passes through unchanged</td></tr>
+<tr><td><code>history()</code> returned the conversation reversed</td><td>the right <em>number</em> of turns, not the right order</td></tr>
+<tr><td>Facts and summary injected twice per prompt</td><td>each layer in isolation, never the assembled prompt</td></tr>
+<tr><td>Per-block token counts were not additive</td><td><code>sum(blocks) == used</code> — self-consistent and still wrong</td></tr>
+</table>
+<p class="punch">None were caught by running tests. All five were caught by asking what a piece of code actually does.</p>`, note:""},
+
+{n:"appendix · cost", cls:"appx", h:`<h2>The full cost model</h2>
+<div class="two">
+<div><p style="font-size:2.5cqh;color:var(--muted)">one session, 14 turns</p>
+<pre>chat          24,427 in  1,736 out
+summary        2,367 in    485 out
+facts          2,326 in    299 out
+embeddings     4,032 in
+re-rank       13,888 in</pre></div>
+<div><p style="font-size:2.5cqh;color:var(--muted)">prompt tokens saturate</p>
+<pre>turn   1     2     3     4     5     6
+in  1,103 1,049 1,218 1,427 1,684 <b>1,994</b></pre>
+<p style="font-size:2.4cqh">Every turn after the sixth costs the same 1,994.</p></div>
+</div>
+<p>The cluster, single-AZ, us-east-1 list prices: <strong>$173.96/month.</strong> The NAT gateway is 19% of it — $32.85 so a container can reach an API.</p>
+<p class="punch">The bill is not in the disk, it is in the RAM. 37 million vectors do not fit in a <code>db.t4g.medium</code> — the instance class is chosen by the index, not by the data.</p>`, note:""},
+
+{n:"appendix · the landscape", cls:"appx", h:`<h2>Where this sits</h2>
+<table>
+<tr><th></th><th>Its position</th></tr>
+<tr><td><strong>Mem0</strong></td><td>extracts atomic facts; fused semantic + keyword + entity retrieval</td></tr>
+<tr><td><strong>Zep / Graphiti</strong></td><td>bitemporal knowledge graph — <em>what was true, and when?</em></td></tr>
+<tr><td><strong>Letta</strong></td><td>the agent edits its own memory</td></tr>
+<tr class="hi"><td><strong>Elephant</strong></td><td>composing context under an explicit token budget</td></tr>
+</table>
+<p>Mem0 reports <strong>94.4</strong> on LongMemEval; an independent comparison reports <strong>49</strong> for Mem0 against <strong>71.2</strong> for Zep — on the same benchmark.</p>
+<p class="punch">Nobody is lying; the setups differ. A number without its method is marketing — and that applies to my numbers too.</p>`, note:""}
+];
+
+const stage=document.getElementById('stage'), hud=document.getElementById('hud'), notes=document.getElementById('notes');
+stage.innerHTML = S.map(s=>`<section class="slide ${s.cls||''}">${s.n?`<div class="kicker">${s.n}</div>`:''}${s.h}</section>`).join('');
+const els=[...document.querySelectorAll('.slide')];
+let i=0, showNotes=false;
+function draw(){
+  els.forEach((e,k)=>e.classList.toggle('on',k===i));
+  hud.textContent=`${i+1} / ${els.length}`;
+  notes.innerHTML=S[i].note||'<i style="color:#8c8778">no notes</i>';
+  notes.classList.toggle('on',showNotes);
+  location.hash=i+1;
+}
+function go(d){ i=Math.max(0,Math.min(els.length-1,i+d)); draw(); }
+addEventListener('keydown',e=>{
+  if(['ArrowRight','ArrowDown','PageDown',' '].includes(e.key)){e.preventDefault();go(1)}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();go(-1)}
+  else if(e.key==='Home'){i=0;draw()} else if(e.key==='End'){i=els.length-1;draw()}
+  else if(e.key==='n'||e.key==='N'){showNotes=!showNotes;draw()}
+  else if(e.key==='f'||e.key==='F'){document.documentElement.requestFullscreen?.()}
+});
+addEventListener('click',e=>{ if(!notes.contains(e.target)) go(e.clientX < innerWidth*0.25 ? -1 : 1) });
+i=Math.max(0,(parseInt(location.hash.slice(1))||1)-1); draw();
+</script>
+</body>
+</html>
