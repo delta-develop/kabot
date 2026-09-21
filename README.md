@@ -52,11 +52,16 @@ from a reserved block, so several workspaces run side by side:
 | core-api | `CORE_API_PORT` | 8000 |
 | agent | `AGENT_PORT` | 8001 |
 | memory | `MEMORY_PORT` | 8002 |
+| console | `CONSOLE_PORT` | 8003 |
 | postgres | `POSTGRES_PORT` | 5432 |
 | mongo | `MONGO_PORT` | 27017 |
 | redis | `REDIS_PORT` | 6379 |
 
 To start a single service: `docker compose up -d --wait memory`.
+
+The console at `CONSOLE_PORT` converses with a subject and shows, beside it, the
+exact context the model received; `./examples/seed-demo.sh` rebuilds the demo
+subject's memory from scratch, which is what `docker compose down -v` erases.
 
 > **Orphaned containers from before the compose project name was pinned:** if you
 > ran this stack before `docker-compose.yml` started setting `name: elephant-${PORT_BASE:-8000}`,
