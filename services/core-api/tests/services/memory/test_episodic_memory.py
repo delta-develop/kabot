@@ -28,7 +28,7 @@ async def test_append_writes_turns(mock_storage_cls):
 
     await EpisodicMemory().append(turns)
 
-    storage.save_many.assert_awaited_once_with(turns)
+    storage.append_many.assert_awaited_once_with(turns)
 
 
 @pytest.mark.asyncio

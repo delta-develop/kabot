@@ -216,3 +216,31 @@ async def test_delete_removes_only_the_named_subject(monkeypatch):
             assert await storage.has_turns(bystander_id) is True
         finally:
             await delete_turns(storage, bystander_id)
+
+
+@pytest.mark.asyncio
+async def test_append_many_skips_turns_already_logged(monkeypatch):
+    """A replayed session adds only what is missing; `save_many` still refuses."""
+    token = uuid4().hex
+    subject_id = f"subject-{token}"
+    session_id = f"session-{token}"
+    now = datetime.now(UTC)
+
+    async with integration_storage(monkeypatch) as storage:
+        try:
+            first = [
+                turn(subject_id, session_id, 0, now),
+                turn(subject_id, session_id, 1, now + timedelta(seconds=1)),
+            ]
+            await storage.append_many(first)
+            await storage.append_many(
+                first + [turn(subject_id, session_id, 2, now + timedelta(seconds=2))]
+            )
+
+            history = await storage.history(subject_id)
+
+            assert [item.seq for item in history] == [0, 1, 2]
+            with pytest.raises(IntegrityError):
+                await storage.save_many([turn(subject_id, session_id, 0, now)])
+        finally:
+            await delete_turns(storage, subject_id)

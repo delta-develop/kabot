@@ -119,8 +119,18 @@ class CognitiveOrchestrator:
                 for turn, embedding in zip(session.turns, embeddings, strict=True)
             ]
             await self.episodic_memory.append(episodic_turns)
+            # ponytail: only the turn log is idempotent, through UNIQUE
+            # (session_id, seq). A retry that dies past the append re-merges the
+            # same turns into the summary and the facts, so a twice-consolidated
+            # session can end up with a summary that states the same thing
+            # twice: degraded, never corrupted, and no turn is lost. The way out
+            # is a per-step marker in Redis keyed by session, left unbuilt
+            # because it is new state to maintain for a case expected never to
+            # happen.
             await self.summary_memory.store_in_memory(subject_id, session.turns)
             await self.fact_memory.store_in_memory(subject_id, session.turns)
+        # Working memory is cleared last: it is the source, and clearing it
+        # before the summary lands would lose the conversation on a failure.
         session.turns = []
         session.status = "consolidated"
         await self.working_memory.store_in_memory(session_id, session)
