@@ -5,6 +5,7 @@ from sqlalchemy import and_
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import exists, text, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -28,6 +29,11 @@ engine: AsyncEngine | None = None
 AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 
+# Postgres reports a concurrently created object as a unique violation on its
+# catalogue, or as a duplicate-object error, depending on what was being made.
+CONCURRENT_DDL = (IntegrityError, ProgrammingError)
+
+
 class RelationalStorage(Storage):
     def __init__(self) -> None:
         self.engine = engine
@@ -40,6 +46,12 @@ class RelationalStorage(Storage):
         try:
             async with bootstrap_engine.begin() as connection:
                 await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        except CONCURRENT_DDL:
+            # `IF NOT EXISTS` checks and creates in two steps. core-api and the
+            # consolidator boot together, so against a fresh volume both see the
+            # extension missing, both try, and the loser takes a unique
+            # violation on pg_extension. The extension is there either way.
+            pass
         finally:
             await bootstrap_engine.dispose()
 
@@ -52,8 +64,16 @@ class RelationalStorage(Storage):
         self.engine = engine
         self.session_local = AsyncSessionLocal
 
-        async with engine.begin() as connection:
-            await connection.run_sync(SQLModel.metadata.create_all)
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
+        except CONCURRENT_DDL:
+            # `create_all` checks before it creates too, so the same race
+            # applies to the table and its indexes. Retried rather than
+            # swallowed: a real schema problem raises on the second attempt,
+            # while a lost race finds the objects already there.
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
 
     def _sessions(self) -> async_sessionmaker[AsyncSession]:
         if self.session_local is None:
