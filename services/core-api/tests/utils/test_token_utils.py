@@ -54,7 +54,7 @@ def test_encoding_is_resolved_once(monkeypatch):
 def test_counts_add_up_across_newline_terminated_pieces():
     pieces = [
         "<fact_memory>{}</fact_memory>\n",
-        "<summary_memory>un resumen</summary_memory>\n",
+        "<summary_memory>a summary</summary_memory>\n",
         '<fragment ts="2026-03-04">\n<user>hola</user><assistant>qué tal</assistant>\n</fragment>\n',
         "<working_memory>\n<user>y eso?</user><assistant>la mudanza</assistant>\n</working_memory>\n",
     ]

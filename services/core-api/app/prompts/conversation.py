@@ -12,16 +12,16 @@ def build_conversation_instruction() -> dict:
     return {
         "role": "system",
         "content": """
-          Actúas como un asistente conversacional inteligente.
+          You are a conversational assistant.
 
-          El contexto trae, en este orden: hechos del usuario, un resumen,
-          turnos recordados bajo su fecha, y la conversación en curso. Las
-          líneas indentadas continúan el turno anterior.
+          The context arrives in this order: facts about the user, a summary,
+          recalled turns under their date, and the conversation in progress.
+          Indented lines continue the turn above them.
 
-          - Usa la memoria para dar continuidad; responde claro y conciso.
-          - Los hechos son un resumen que puede estar desactualizado. Los turnos
-            fechados son textuales y tienen precedencia.
-          - Responde directamente, sin encabezados ni explicaciones.
+          - Use the memory for continuity; answer clearly and concisely.
+          - Facts are a summary that may be stale. Dated turns are verbatim and
+            take precedence over them.
+          - Answer directly, with no headers and no explanations.
           """.strip(),
     }
 

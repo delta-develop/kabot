@@ -574,7 +574,7 @@ def test_subject_memory_endpoints_report_what_the_system_knows(mocker):
     orchestrator.fact_memory.retrieve_from_memory.return_value = {
         "dieta": "vegetariano"
     }
-    orchestrator.summary_memory.retrieve_from_memory.return_value = "Un resumen."
+    orchestrator.summary_memory.retrieve_from_memory.return_value = "A summary."
     mocker.patch(
         "app.api.routes.recall.CognitiveOrchestrator.from_defaults",
         return_value=orchestrator,
@@ -585,7 +585,7 @@ def test_subject_memory_endpoints_report_what_the_system_knows(mocker):
     summary = client.get("/subjects/leo/memory/summary")
 
     assert facts.json() == {"subject_id": "leo", "facts": {"dieta": "vegetariano"}}
-    assert summary.json() == {"subject_id": "leo", "summary": "Un resumen."}
+    assert summary.json() == {"subject_id": "leo", "summary": "A summary."}
 
 
 def test_the_live_message_is_verbatim_but_escaped_once_it_is_memory():
