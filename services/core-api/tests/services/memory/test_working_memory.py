@@ -1,12 +1,27 @@
 import asyncio
 import os
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
 from app.models.session import SessionDocument, TurnDraft
 from app.services.memory.working_memory import WorkingMemory
+from app.services.storage import connections
+
+
+@pytest.fixture
+def fresh_redis():
+    """Rebind the Redis singleton to this test's event loop.
+
+    connections._redis_client is created once per process, so the second test
+    that touches real Redis inherits a client bound to a loop that is already
+    closed.
+    """
+    connections._redis_client = None
+    yield
+    connections._redis_client = None
 
 
 def session_document() -> SessionDocument:
@@ -74,7 +89,7 @@ def test_working_memory_uses_session_namespace():
 
 @pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL is not configured")
 @pytest.mark.asyncio
-async def test_real_redis_key_has_renewing_ttl():
+async def test_real_redis_key_has_renewing_ttl(fresh_redis):
     memory = WorkingMemory()
     session_id = str(uuid4())
     session = session_document()
@@ -93,3 +108,56 @@ async def test_real_redis_key_has_renewing_ttl():
         assert renewed_ttl > first_ttl - 1
     finally:
         await memory.delete_from_memory(session_id)
+
+
+@pytest.mark.asyncio
+async def test_track_session_indexes_the_session_under_its_subject(mocker):
+    memory = WorkingMemory()
+    index = mocker.patch.object(memory, "subject_index", new=AsyncMock())
+
+    await memory.track_session("leo", "session-id")
+
+    index.add_to_set.assert_awaited_once_with("leo", "session-id")
+
+
+@pytest.mark.asyncio
+async def test_forget_subject_deletes_every_indexed_session_and_the_index(mocker):
+    memory = WorkingMemory()
+    index = mocker.patch.object(memory, "subject_index", new=AsyncMock())
+    index.members.return_value = ["session-a", "session-b"]
+    storage = mocker.patch.object(memory, "storage", new=AsyncMock())
+
+    await memory.forget_subject("leo")
+
+    assert [call.args[0] for call in storage.delete.await_args_list] == [
+        "session-a",
+        "session-b",
+    ]
+    index.delete.assert_awaited_once_with("leo")
+
+
+@pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL is not configured")
+@pytest.mark.asyncio
+async def test_real_redis_forgets_a_subject_across_every_indexed_session(fresh_redis):
+    memory = WorkingMemory()
+    subject_id = f"subject-{uuid4()}"
+    session_ids = [str(uuid4()), str(uuid4())]
+    redis = await memory.storage._get_redis()
+
+    try:
+        for session_id in session_ids:
+            await memory.store_in_memory(session_id, session_document())
+            await memory.track_session(subject_id, session_id)
+
+        assert sorted(await memory.session_ids(subject_id)) == sorted(session_ids)
+
+        await memory.forget_subject(subject_id)
+
+        for session_id in session_ids:
+            assert not await redis.exists(f"session:{session_id}")
+        assert not await redis.exists(f"subject_sessions:{subject_id}")
+        assert await memory.session_ids(subject_id) == []
+    finally:
+        for session_id in session_ids:
+            await memory.delete_from_memory(session_id)
+        await memory.subject_index.delete(subject_id)

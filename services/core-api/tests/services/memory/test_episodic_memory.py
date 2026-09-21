@@ -53,7 +53,42 @@ async def test_has_turns_delegates_to_storage(mock_storage_cls):
     mock_storage_cls.return_value = storage
 
     assert await EpisodicMemory().has_turns("leo") is True
-    storage.has_turns.assert_awaited_once_with("leo")
+    storage.has_turns.assert_awaited_once_with("leo", None)
+
+
+@pytest.mark.asyncio
+@patch("app.services.memory.episodic_memory.RelationalStorage")
+async def test_has_turns_forwards_the_session_exclusion(mock_storage_cls):
+    storage = AsyncMock()
+    storage.has_turns.return_value = False
+    mock_storage_cls.return_value = storage
+
+    result = await EpisodicMemory().has_turns("leo", exclude_session="current")
+
+    assert result is False
+    storage.has_turns.assert_awaited_once_with("leo", "current")
+
+
+@pytest.mark.asyncio
+@patch("app.services.memory.episodic_memory.RelationalStorage")
+async def test_by_session_delegates_to_storage(mock_storage_cls):
+    storage = AsyncMock()
+    storage.by_session.return_value = []
+    mock_storage_cls.return_value = storage
+
+    assert await EpisodicMemory().by_session("session-id", 10, 5) == []
+    storage.by_session.assert_awaited_once_with("session-id", 10, 5)
+
+
+@pytest.mark.asyncio
+@patch("app.services.memory.episodic_memory.RelationalStorage")
+async def test_delete_delegates_to_storage(mock_storage_cls):
+    storage = AsyncMock()
+    mock_storage_cls.return_value = storage
+
+    await EpisodicMemory().delete("leo")
+
+    storage.delete.assert_awaited_once_with("leo")
 
 
 @pytest.mark.asyncio

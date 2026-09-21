@@ -1,12 +1,20 @@
 from datetime import UTC, datetime
 from typing import Any, Sequence
 
+from app.models.context import Context, ContextBlock
 from app.models.session import SessionDocument, TurnDraft
 from app.models.turn import Turn
-from app.prompts.conversation import build_conversation_prompt
+from app.prompts.conversation import build_conversation_prompt, scaffolding_tokens
 from app.services.llm.base import LLMBase
+from app.services.memory.context_builder import (
+    DEFAULT_CONTEXT_BUDGET,
+    WORKING_HEADER,
+    assemble,
+    render_turn,
+)
 from app.services.memory.memory import EpisodicLog, KeyedMemory
 from app.utils.openai_utils import get_embeddings
+from app.utils.token_utils import count_tokens
 
 
 class CognitiveOrchestrator:
@@ -20,42 +28,71 @@ class CognitiveOrchestrator:
         self.llm: LLMBase
         self.naive: bool = naive
 
+    async def build_context(
+        self, session_id: str, session: SessionDocument, q: str, budget: int
+    ) -> Context:
+        """Assembles the best context that fits in `budget` tokens."""
+        return await assemble(
+            session_id,
+            session,
+            q,
+            budget,
+            self.fact_memory,
+            self.summary_memory,
+            self.episodic_memory,
+        )
+
     async def handle_incoming_message(
-        self, subject_id: str, session_id: str, user_msg: str
-    ) -> str:
-        """Generates a response using subject and session memory."""
+        self,
+        subject_id: str,
+        session_id: str,
+        user_msg: str,
+        budget: int = DEFAULT_CONTEXT_BUDGET,
+    ) -> tuple[str, Context | None]:
+        """Generates a response using subject and session memory.
+
+        Returns the reply and the context it was grounded on. Naive mode has no
+        budget to report, so it returns None.
+        """
         session = await self.working_memory.retrieve_from_memory(session_id)
         if session is None:
             raise KeyError(f"Session not found: {session_id}")
 
-        history: Sequence[TurnDraft | Turn]
         if self.naive:
             history = await self.expand_context_from_long_term(subject_id)
-            facts, summary = "", ""
+            context, reported = self._naive_context(history), None
         else:
-            history = session.turns
-            facts, summary = await self._load_fact_and_summary_context(subject_id)
+            context = await self.build_context(session_id, session, user_msg, budget)
+            reported = context
 
-        prompt_messages = build_conversation_prompt(
-            facts, summary, self._format_history(history), user_msg
-        )
+        prompt_messages = build_conversation_prompt(context, user_msg)
         llm_reply = await self.llm.generate_response(prompt_messages)
         if not llm_reply.strip():
             llm_reply = "Sorry, I don't have an answer for that right now."
 
         await self._store_dialogue(session_id, session, user_msg, llm_reply)
-        return llm_reply
+        return llm_reply, reported
 
-    async def _load_fact_and_summary_context(self, subject_id: str) -> tuple[Any, Any]:
-        facts = await self.fact_memory.retrieve_from_memory(subject_id) or ""
-        summary = await self.summary_memory.retrieve_from_memory(subject_id) or ""
-        return facts, summary
+    def _naive_context(self, history: Sequence[TurnDraft | Turn]) -> Context:
+        """Renders the whole episodic history, with no ceiling.
 
-    def _format_history(self, turns: Sequence[TurnDraft | Turn]) -> str:
-        return "\n".join(
-            f"<user>{turn.user_text}</user>"
-            f"<assistant>{turn.assistant_text}</assistant>"
-            for turn in turns
+        LEO-28 needs this arm as its control, so the prompt it produces stays
+        what it was: full history, no facts and no summary. `budget` is zero
+        because naive never asked for one; this context is fed to the prompt
+        builder and never returned over HTTP.
+        """
+        content = WORKING_HEADER + "".join(render_turn(turn) for turn in history)
+        blocks = [
+            ContextBlock(
+                source="working", tokens=count_tokens(content), content=content
+            )
+        ]
+        return Context(
+            budget=0,
+            used=sum(block.tokens for block in blocks),
+            system_tokens=scaffolding_tokens(),
+            message_tokens=0,
+            blocks=blocks,
         )
 
     async def expand_context_from_long_term(self, subject_id: str) -> list[Turn]:

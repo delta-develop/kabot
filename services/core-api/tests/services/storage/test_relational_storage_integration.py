@@ -147,3 +147,72 @@ async def test_associative_recall_returns_past_hit_neighbors_and_excludes_curren
             )
         finally:
             await delete_turns(storage, subject_id)
+
+
+@pytest.mark.asyncio
+async def test_has_turns_can_exclude_the_current_session(monkeypatch):
+    subject_id = f"exclusion-{uuid4()}"
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+
+    async with integration_storage(monkeypatch) as storage:
+        try:
+            await storage.save_many([turn(subject_id, "only-session", 0, base)])
+
+            assert await storage.has_turns(subject_id) is True
+            assert (
+                await storage.has_turns(subject_id, exclude_session="only-session")
+                is False
+            )
+            assert (
+                await storage.has_turns(subject_id, exclude_session="other-session")
+                is True
+            )
+        finally:
+            await delete_turns(storage, subject_id)
+
+
+@pytest.mark.asyncio
+async def test_by_session_pages_in_sequence_order(monkeypatch):
+    subject_id = f"paging-{uuid4()}"
+    session_id = f"session-{uuid4()}"
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+
+    async with integration_storage(monkeypatch) as storage:
+        try:
+            await storage.save_many(
+                [
+                    turn(subject_id, session_id, seq, base + timedelta(minutes=seq))
+                    for seq in (2, 0, 1, 3)
+                ]
+            )
+
+            first_page = await storage.by_session(session_id, limit=2)
+            second_page = await storage.by_session(session_id, limit=2, offset=2)
+
+            assert [item.seq for item in first_page] == [0, 1]
+            assert [item.seq for item in second_page] == [2, 3]
+        finally:
+            await delete_turns(storage, subject_id)
+
+
+@pytest.mark.asyncio
+async def test_delete_removes_only_the_named_subject(monkeypatch):
+    subject_id = f"erased-{uuid4()}"
+    bystander_id = f"kept-{uuid4()}"
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+
+    async with integration_storage(monkeypatch) as storage:
+        try:
+            await storage.save_many(
+                [
+                    turn(subject_id, "session-a", 0, base),
+                    turn(bystander_id, "session-b", 0, base),
+                ]
+            )
+
+            await storage.delete(subject_id)
+
+            assert await storage.has_turns(subject_id) is False
+            assert await storage.has_turns(bystander_id) is True
+        finally:
+            await delete_turns(storage, bystander_id)

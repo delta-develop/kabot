@@ -83,6 +83,30 @@ class CacheStorage:
         redis = await self._get_redis()
         await redis.delete(self._make_key(key))
 
+    async def add_to_set(self, key: str, member: str) -> None:
+        """
+        Adds a member to the set stored under the namespaced key.
+
+        Args:
+            key (str): The base key of the set.
+            member (str): The member to add.
+        """
+        redis = await self._get_redis()
+        await redis.sadd(self._make_key(key), member)
+
+    async def members(self, key: str) -> list[str]:
+        """
+        Returns the members of the set stored under the namespaced key.
+
+        Args:
+            key (str): The base key of the set.
+
+        Returns:
+            list[str]: The members, sorted for a stable order.
+        """
+        redis = await self._get_redis()
+        return sorted(await redis.smembers(self._make_key(key)))
+
     async def append_interaction(
         self, key: str, user_msg: str, assistant_msg: str
     ) -> None:

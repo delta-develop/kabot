@@ -72,3 +72,17 @@ async def test_get_raw(cache, mocker):
 
     raw_value = await cache.get_raw("key3")
     assert raw_value == b"raw_string"
+
+
+@pytest.mark.asyncio
+async def test_set_operations_round_trip(cache, mocker):
+    redis = AsyncMock()
+    redis.smembers.return_value = {"session-b", "session-a"}
+    mocker.patch.object(cache, "_get_redis", AsyncMock(return_value=redis))
+
+    await cache.add_to_set("leo", "session-a")
+    members = await cache.members("leo")
+
+    redis.sadd.assert_awaited_once_with("test:leo", "session-a")
+    redis.smembers.assert_awaited_once_with("test:leo")
+    assert members == ["session-a", "session-b"]

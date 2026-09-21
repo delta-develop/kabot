@@ -15,8 +15,18 @@ class EpisodicMemory(EpisodicLog):
     async def history(self, subject_id: str, limit: int | None = None) -> list[Turn]:
         return await self.storage.history(subject_id, limit)
 
-    async def has_turns(self, subject_id: str) -> bool:
-        return await self.storage.has_turns(subject_id)
+    async def has_turns(
+        self, subject_id: str, exclude_session: str | None = None
+    ) -> bool:
+        return await self.storage.has_turns(subject_id, exclude_session)
+
+    async def by_session(
+        self, session_id: str, limit: int, offset: int = 0
+    ) -> list[Turn]:
+        return await self.storage.by_session(session_id, limit, offset)
+
+    async def delete(self, subject_id: str) -> None:
+        await self.storage.delete(subject_id)
 
     async def similar(
         self,

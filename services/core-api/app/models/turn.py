@@ -54,3 +54,21 @@ class Fragment(BaseModel):
     session_id: str
     ts: datetime
     similarity: float
+
+
+class TurnView(BaseModel):
+    """A turn as it leaves the API: no embedding, no internal identifiers."""
+
+    seq: int
+    ts: datetime
+    user_text: str
+    assistant_text: str
+
+
+class FragmentView(BaseModel):
+    """A fragment as it leaves the API."""
+
+    turns: list[TurnView]
+    session_id: str
+    ts: datetime
+    similarity: float

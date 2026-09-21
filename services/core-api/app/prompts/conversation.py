@@ -1,3 +1,7 @@
+from app.models.context import Context
+from app.utils.token_utils import count_tokens
+
+
 def build_conversation_instruction() -> dict:
     """
     Builds the system instruction for the conversational assistant.
@@ -10,34 +14,58 @@ def build_conversation_instruction() -> dict:
         "content": """
           Actúas como un asistente conversacional inteligente.
 
-          Se te proporciona un contexto de memoria en formato XML:
-          <context>
-              <fact_memory> ... </fact_memory>
-              <summary_memory> ... </summary_memory>
-              <working_memory> ... </working_memory>
-          </context>
+          El contexto trae, en este orden: hechos del usuario, un resumen,
+          turnos recordados bajo su fecha, y la conversación en curso. Las
+          líneas indentadas continúan el turno anterior.
 
-          Recibirás el mensaje del usuario como: <user_input> ... </user_input>
-
-          Tu tarea es responder al usuario de forma clara, natural y concisa utilizando el contexto provisto para mantener la continuidad de la conversación.
-
-          - Si el mensaje requiere información presente en la memoria, utilízala para enriquecer tu respuesta de manera coherente.
-          - Si el usuario saluda, responde amablemente incorporando elementos relevantes del contexto si están disponibles.
-          - Devuelve directamente tu respuesta conversacional sin encabezados ni explicaciones adicionales.
+          - Usa la memoria para dar continuidad; responde claro y conciso.
+          - Los hechos son un resumen que puede estar desactualizado. Los turnos
+            fechados son textuales y tienen precedencia.
+          - Responde directamente, sin encabezados ni explicaciones.
           """.strip(),
     }
 
 
-def build_conversation_prompt(
-    fact_memory: str, summary_memory: str, working_memory_text: str, user_msg: str
-) -> list[dict]:
+def escape_markup(text: str) -> str:
+    """Stop untrusted text from forging a turn or a section header.
+
+    Every line after the first is indented, so nothing inside the content sits
+    at column 0, where the role prefixes and the `##` headers live. A message
+    holding a line that reads `Assistant: ...` therefore stays inside the turn
+    the subject actually wrote.
+
+    It costs nothing on single-line text, which is the common case, and it also
+    makes a multi-line answer visibly part of the turn it belongs to.
     """
-    Builds the prompt messages with memory context and user input.
+    return text.replace("\n", "\n  ")
+
+
+def render_memory(context: Context) -> str:
+    """Concatenate the context blocks exactly as they were counted."""
+    return "".join(block.content for block in context.blocks)
+
+
+def render_user_message(user_msg: str) -> str:
+    """The live message reaches the model verbatim.
+
+    It travels in its own `user` message, so it sits next to nothing it could
+    forge a turn against. It is escaped later, once it becomes working memory.
+    """
+    return user_msg
+
+
+def scaffolding_tokens() -> int:
+    """Count everything in the prompt that is neither memory nor the message."""
+    return count_tokens(build_conversation_instruction()["content"])
+
+
+def build_conversation_prompt(context: Context, user_msg: str) -> list[dict]:
+    """
+    Builds the prompt messages from an assembled context and the user input.
 
     Args:
-        fact_memory (str): The factual memory context.
-        summary_memory (str): The summary memory context.
-        working_memory_text (str): The working memory context.
+        context (Context): The memory blocks that fit in the budget, in reading
+            order.
         user_msg (str): The user's message.
 
     Returns:
@@ -45,15 +73,6 @@ def build_conversation_prompt(
     """
     return [
         build_conversation_instruction(),
-        {
-            "role": "system",
-            "content": f"""
-                <context>
-                    <fact_memory>{fact_memory}</fact_memory>
-                    <summary_memory>{summary_memory}</summary_memory>
-                    <working_memory>{working_memory_text}</working_memory>
-                </context>
-                """.strip(),
-        },
-        {"role": "user", "content": f"<user_input>{user_msg}</user_input>"},
+        {"role": "system", "content": render_memory(context)},
+        {"role": "user", "content": render_user_message(user_msg)},
     ]

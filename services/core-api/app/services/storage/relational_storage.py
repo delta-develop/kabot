@@ -1,6 +1,8 @@
 import os
 from typing import Any
 
+from sqlalchemy import and_
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import exists, text, tuple_
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -94,12 +96,40 @@ class RelationalStorage(Storage):
             result = await session.execute(statement)
             return list(result.scalars().all())
 
-    async def has_turns(self, subject_id: str) -> bool:
+    async def has_turns(
+        self, subject_id: str, exclude_session: str | None = None
+    ) -> bool:
         columns = SQLModel.metadata.tables["turn"].c
-        statement = select(exists().where(columns.subject_id == subject_id))
+        condition = columns.subject_id == subject_id
+        if exclude_session is not None:
+            condition = and_(condition, columns.session_id != exclude_session)
+        statement = select(exists().where(condition))
         async with self._sessions()() as session:
             result = await session.execute(statement)
             return bool(result.scalar())
+
+    async def by_session(
+        self, session_id: str, limit: int, offset: int = 0
+    ) -> list[Turn]:
+        columns = SQLModel.metadata.tables["turn"].c
+        statement = (
+            select(Turn)
+            .where(columns.session_id == session_id)
+            .order_by(columns.seq.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        async with self._sessions()() as session:
+            result = await session.execute(statement)
+            return list(result.scalars().all())
+
+    async def delete(self, subject_id: str) -> None:
+        columns = SQLModel.metadata.tables["turn"].c
+        async with self._sessions()() as session:
+            async with session.begin():
+                await session.execute(
+                    sql_delete(Turn).where(columns.subject_id == subject_id)
+                )
 
     async def similar(
         self,

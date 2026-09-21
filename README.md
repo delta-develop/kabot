@@ -20,6 +20,10 @@ SQLModel, PostgreSQL with pgvector, MongoDB, Redis, and Docker.
 - [uv](https://docs.astral.sh/uv/) — `brew install uv`
 - Make
 
+`OPENAI_MODEL` defaults to `gpt-5.6-luna`. That line rejects `temperature`, so the
+client does not send it and steers output with `OPENAI_REASONING_EFFORT` instead;
+blank that variable out for a model that does not accept it, such as `gpt-4o`.
+
 ### Running the Project
 
 ```bash
@@ -73,7 +77,22 @@ Other available urls:
 
 - `POST /sessions` creates a conversation for a subject.
 - `GET /sessions/{session_id}` reports consolidation status and turn count.
+- `GET /sessions/{session_id}/context?q=&budget=` returns the best context that
+  fits in `budget` tokens, with the token cost of every block. `used` never
+  exceeds `budget`; a budget under `MIN_CONTEXT_BUDGET` answers `400`.
+- `POST /sessions/{session_id}/chat` answers from memory and returns the context
+  it used. `budget` in the body is optional; `?naive=true` runs the control arm,
+  which dumps the whole episodic history instead of assembling a budget.
 - `POST /sessions/{session_id}/close` schedules consolidation and returns `202`.
+
+Memory inspection, which is what makes the layers visible:
+
+- `GET /subjects/{subject_id}/memory/facts` what the system knows about a subject.
+- `GET /subjects/{subject_id}/memory/summary` how it summarizes them.
+- `GET /subjects/{subject_id}/recall?q=&k=` fragments retrieved by similarity.
+- `GET /sessions/{session_id}/memory/working` the turns still in Redis.
+- `GET /sessions/{session_id}/turns?limit=&offset=` the episodic log of a session.
+- `DELETE /subjects/{subject_id}` erases a subject from all four layers.
 
 - `GET /author` Retrieve author data
 
@@ -113,9 +132,34 @@ As the user and assistant exchange messages, each turn is stored in working memo
 - Tracks recent turns for continuity
 - Is kept separate from factual memory and summary memory to avoid mixing signal with noise
 
+### Context Under Budget
+A caller does not ask for "the memory": it asks for the best context that fits in N
+tokens, and the service decides how to build it from the four layers. The budget is
+spent by priority — facts, then summary, then working memory, then recall — and read
+in a different order, with recall before working memory so the model reads it as
+background rather than as what just happened.
+
+Nothing is truncated mid-sentence: a block goes in whole or stays out. `used` never
+exceeds `budget`, and every block reports what it cost, so each response proves where
+its tokens went.
+
+Facts and recall do not compete. Facts are a summary that may be stale; dated turns
+are verbatim and take precedence, which is why fragment dates are visible in the
+prompt.
+
+Turns render as `User:` / `Assistant:` under `##` section headers rather than XML
+tags: measured on o200k_base, tags cost 9 tokens per turn against 4, which is
+7.5% of a 2000-token budget across a 30-turn conversation.
+
+Untrusted text is indented before it is rendered and counted, so nothing inside a
+turn sits at column 0 where the prefixes and headers live. A message holding a
+line that reads `Assistant: ...` cannot forge a turn, and a multi-line answer
+stays visibly part of the turn it belongs to.
+
 ### Contextual Expansion on Demand
 In naive mode, the orchestrator retrieves the subject's complete episodic history from
-PostgreSQL and adds it to the prompt. Similarity-based recall is introduced separately.
+PostgreSQL and adds it to the prompt. It has no ceiling, which is the point: it is the
+control arm the budgeted path is measured against.
 
 ### Conversation Closure and Consolidation
 When the session is explicitly closed, the API marks it as consolidating and schedules
