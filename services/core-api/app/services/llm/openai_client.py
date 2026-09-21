@@ -1,8 +1,8 @@
-import os
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from app.services.llm.base import LLMBase
 from app.services.storage.connections import get_openai_client
+from app.utils.openai_utils import get_chat_model, get_reasoning_effort
 
 
 class OpenAIClient(LLMBase):
@@ -14,8 +14,8 @@ class OpenAIClient(LLMBase):
 
     def __init__(self):
         """Initializes the OpenAIClient with model parameters from environment variables."""
-        self.model = os.getenv("OPENAI_MODEL")
-        self.temperature = float(os.getenv("OPENAI_TEMPERATURE", 0.7))
+        self.model = get_chat_model()
+        self.reasoning_effort = get_reasoning_effort()
         self.client = None
 
     async def get_client(self):
@@ -39,10 +39,15 @@ class OpenAIClient(LLMBase):
         """
         if not self.client:
             self.client = await self.get_client()
+        # No `temperature`: the gpt-5 line answers 400 for any value but the
+        # default. Output is steered with reasoning effort instead.
+        options: dict[str, Any] = {}
+        if self.reasoning_effort:
+            options["reasoning_effort"] = self.reasoning_effort
         response = await self.client.chat.completions.create(
             model=self.model,
-            temperature=self.temperature,
             messages=messages,
+            **options,
         )
         return response.choices[0].message.content.strip()
 
