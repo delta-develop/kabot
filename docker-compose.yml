@@ -24,6 +24,30 @@ services:
     volumes:
       - ./services/core-api:/src/services/core-api
 
+  # Same image as core-api, different entrypoint: the worker needs Postgres,
+  # Mongo, Redis and the LLM client, which is exactly core-api's dependency set.
+  # A separate process rather than a thread, so restarting the API never
+  # interrupts a consolidation and the other way round.
+  consolidator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: core-api
+    command: ["python", "-m", "app.workers.consolidation"]
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./services/core-api:/src/services/core-api
+
   agent:
     build:
       context: .
