@@ -70,6 +70,26 @@ services:
     volumes:
       - ./services/memory:/src/services/memory
 
+  # The console is a pure HTTP consumer: nginx serves the built page and proxies
+  # /api/ to core-api over the compose network. No env_file — .env carries live
+  # OPENAI_API_KEY and TYPESAFE_API_KEY, which have no business in a frontend
+  # container.
+  console:
+    build:
+      context: ./frontend
+    ports:
+      - "${CONSOLE_PORT:-8003}:80"
+    depends_on:
+      - core-api
+    healthcheck:
+      # 127.0.0.1, not localhost: `listen 80` binds IPv4 only, and inside the
+      # container localhost resolves to ::1 first, so BusyBox wget is refused
+      # while the published port answers fine.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   mongo:
     image: mongo:5
     ports:

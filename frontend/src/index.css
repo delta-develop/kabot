@@ -1,0 +1,371 @@
+:root {
+  --bg:      #fbfbfa;   --surface: #ffffff;
+  --ink:     #1a1a18;   --muted:   #6b6b66;
+  --line:    #e2e2dd;   --absent:  #f4f4f1;
+  --accent:  #b4530a;                        /* solo el bloque recall */
+  --facts:   #7a8b99;   --summary: #9aa88f;
+  --recall:  var(--accent);
+  --working: #c0b49b;
+
+  /* No webfont: a font that fails to load is a page that flickers. */
+  --prose: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--prose);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── shell ───────────────────────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.brand strong {
+  letter-spacing: 0.08em;
+}
+
+.brand span {
+  color: var(--muted);
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.control input,
+.control select {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
+.control input {
+  width: 96px;
+}
+
+.ghost-button {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.error-strip {
+  padding: 8px 16px;
+  background: var(--absent);
+  border-bottom: 1px solid var(--line);
+  color: var(--accent);
+  font-family: var(--mono);
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.pane + .pane {
+  border-left: 1px solid var(--line);
+}
+
+.pane-title {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+/* Below this width the columns stop being readable side by side. */
+@media (max-width: 1099px) {
+  .app {
+    height: auto;
+  }
+
+  .panes {
+    grid-template-columns: 1fr;
+  }
+
+  .pane + .pane {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* ── conversation ────────────────────────────────────────────────────────── */
+
+.chat-pane {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.transcript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.bubble {
+  max-width: 46ch;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bubble-you {
+  align-self: flex-end;
+}
+
+.bubble-role {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.thinking {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.composer textarea {
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+}
+
+.composer textarea:disabled {
+  color: var(--muted);
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── memory panel ────────────────────────────────────────────────────────── */
+
+.placeholder {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.budget {
+  margin-bottom: 16px;
+}
+
+.budget-total {
+  font-family: var(--mono);
+}
+
+.budget-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.budget-track {
+  display: flex;
+  flex: 1;
+  height: 8px;
+  background: var(--absent);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.budget-pct,
+.budget-outside {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.budget-note {
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.card-absent {
+  background: var(--absent);
+}
+
+.card-recall {
+  border-color: var(--accent);
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.card-absent .card-head {
+  border-bottom: none;
+}
+
+.card-recall .card-head strong {
+  color: var(--accent);
+}
+
+.card-note {
+  color: var(--muted);
+}
+
+.card-body {
+  padding: 8px;
+}
+
+.card-body pre {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.card-empty {
+  padding: 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chip {
+  align-self: flex-start;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.chips-note {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.prompt {
+  margin-top: 16px;
+}
+
+.prompt summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+}
+
+.prompt-body {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.prompt-body pre {
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

@@ -13,7 +13,7 @@ PORT_RANGE_STEP=10
 # Offsets published by write_port_vars below; the host probe must check all
 # of them, not just the base, or a foreign process on a non-zero offset goes
 # undetected until `docker compose up` fails.
-PORT_OFFSETS="0 1 2 5 6 7"
+PORT_OFFSETS="0 1 2 3 5 6 7"
 # ponytail: 60s is a guessed ceiling for "abandoned lock", not measured
 # against any real critical-section duration here; upgrade to a configurable
 # threshold or a heartbeat-refreshed lock if legitimate holders start taking
@@ -205,6 +205,7 @@ write_port_vars() {
     _set_env_var CORE_API_PORT "$((base + 0))"
     _set_env_var AGENT_PORT "$((base + 1))"
     _set_env_var MEMORY_PORT "$((base + 2))"
+    _set_env_var CONSOLE_PORT "$((base + 3))"
     _set_env_var POSTGRES_PORT "$((base + 5))"
     _set_env_var MONGO_PORT "$((base + 6))"
     _set_env_var REDIS_PORT "$((base + 7))"
