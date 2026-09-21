@@ -31,6 +31,9 @@ def orchestrator():
     instance.working_memory = AsyncMock()
     instance.fact_memory = AsyncMock()
     instance.episodic_memory = AsyncMock()
+    # Without this the assembler would treat the mock's truthy return as real
+    # history and reach for a live embedding.
+    instance.episodic_memory.has_turns.return_value = False
     instance.summary_memory = AsyncMock()
     return instance
 
@@ -44,11 +47,13 @@ async def test_handle_incoming_message_returns_direct_reply(orchestrator):
     orchestrator.fact_memory.retrieve_from_memory.return_value = ""
     orchestrator.summary_memory.retrieve_from_memory.return_value = ""
 
-    response = await orchestrator.handle_incoming_message(
+    response, context = await orchestrator.handle_incoming_message(
         "leo", "session-id", "Hi there"
     )
 
     assert response == direct_reply
+    assert context is not None
+    assert context.used <= context.budget
     stored_session = orchestrator.working_memory.store_in_memory.call_args.args[1]
     assert stored_session.turns[0].seq == 0
     assert stored_session.turns[0].assistant_text == direct_reply
@@ -105,10 +110,10 @@ async def test_naive_history_prompt_starts_with_first_turn_of_first_session(
 
     prompt_messages = orchestrator.llm.generate_response.call_args.args[0]
     context_content = prompt_messages[1]["content"]
-    assert "<fact_memory></fact_memory>" in context_content
-    assert "<summary_memory></summary_memory>" in context_content
-    assert "<user>first turn of first session</user>" in context_content
-    assert "<user>last turn of latest session</user>" in context_content
+    assert "## hechos" not in context_content
+    assert "## resumen" not in context_content
+    assert "User: first turn of first session" in context_content
+    assert "User: last turn of latest session" in context_content
     assert context_content.index("first turn of first session") < context_content.index(
         "last turn of latest session"
     )
@@ -132,7 +137,7 @@ async def test_handle_incoming_message_uses_subject_context_once(orchestrator):
     context_content = orchestrator.llm.generate_response.call_args.args[0][1]["content"]
     assert context_content.count("User fact") == 1
     assert context_content.count("User summary") == 1
-    assert "<user>working message</user>" in context_content
+    assert "User: working message" in context_content
     assert "episodic message" not in context_content
 
 
@@ -191,4 +196,28 @@ async def test_subject_memory_survives_between_sessions(orchestrator, mocker):
     context = orchestrator.llm.generate_response.call_args.args[0][1]["content"]
     assert "Favorite color: green" in context
     assert "Prior conversation" in context
-    assert "<working_memory></working_memory>" in context
+    assert "## en curso" not in context
+
+
+@pytest.mark.asyncio
+async def test_naive_mode_answers_without_going_through_build_context(
+    orchestrator, mocker
+):
+    """LEO-28 needs this arm untouched: no budget, no assembler, full history."""
+    assemble = mocker.patch(
+        "app.services.memory.cognitive_orchestrator.assemble", new_callable=AsyncMock
+    )
+    orchestrator.naive = True
+    orchestrator.episodic_memory.history.return_value = [turn("archived message")]
+    orchestrator.working_memory.retrieve_from_memory.return_value = session()
+    orchestrator.llm.generate_response.return_value = "Hello!"
+
+    reply, context = await orchestrator.handle_incoming_message(
+        "leo", "session-id", "Test input"
+    )
+
+    assert reply == "Hello!"
+    assert context is None
+    assemble.assert_not_awaited()
+    prompt = orchestrator.llm.generate_response.call_args.args[0][1]["content"]
+    assert "archived message" in prompt
