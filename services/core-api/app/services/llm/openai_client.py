@@ -28,11 +28,15 @@ class OpenAIClient(LLMBase):
             self.client = await get_openai_client()
         return self.client
 
-    async def generate_response(self, messages: List[Dict]) -> str:
+    async def generate_response(
+        self, messages: List[Dict], as_json: bool = False
+    ) -> str:
         """Generates a response from the language model based on the given message history.
 
         Args:
             messages (List[Dict]): A list of message dictionaries representing the conversation history.
+            as_json (bool): Constrain the reply to a single JSON object. Asking for
+                JSON in the prompt is a request; this is a guarantee.
 
         Returns:
             str: The generated response from the language model.
@@ -44,6 +48,8 @@ class OpenAIClient(LLMBase):
         options: dict[str, Any] = {}
         if self.reasoning_effort:
             options["reasoning_effort"] = self.reasoning_effort
+        if as_json:
+            options["response_format"] = {"type": "json_object"}
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,

@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -6,6 +7,8 @@ from app.prompts.facts import build_fact_merge_prompt
 from app.services.llm.base import LLMBase
 from app.services.memory.memory import KeyedMemory
 from app.services.storage.non_relational_storage import NonRelationalStorage
+
+logger = logging.getLogger(__name__)
 
 
 class FactMemory(KeyedMemory[dict]):
@@ -39,8 +42,17 @@ class FactMemory(KeyedMemory[dict]):
         prompt = await build_fact_merge_prompt(
             recent_messages=data, previous_facts=old_facts or {}
         )
-        raw = await self.llm.generate_response([prompt])
-        updated_facts = json.loads(raw)
+        raw = await self.llm.generate_response([prompt], as_json=True)
+        try:
+            updated_facts = json.loads(raw)
+        except json.JSONDecodeError:
+            # The model owes us JSON and sometimes does not deliver. Facts merge
+            # across sessions, so skipping one merge loses a little; raising here
+            # would abort the whole closure and lose the summary too.
+            logger.exception(
+                "Fact merge returned malformed JSON for %s: %.200s", key, raw
+            )
+            return
         await self.storage.save(
             {
                 "subject_id": key,

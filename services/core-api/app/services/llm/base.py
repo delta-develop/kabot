@@ -19,13 +19,14 @@ class LLMBase(ABC):
         pass
 
     @abstractmethod
-    async def generate_response(self, messages: list) -> str:
+    async def generate_response(self, messages: list, as_json: bool = False) -> str:
         """
         Generate a response based on a list of structured chat messages.
 
         Args:
             messages (list): A list of messages, where each message is a dictionary
                              containing 'role' and 'content' keys.
+            as_json (bool): Constrain the reply to a single JSON object.
 
         Returns:
             str: The generated response.
