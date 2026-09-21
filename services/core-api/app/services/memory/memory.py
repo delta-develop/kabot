@@ -34,7 +34,19 @@ class EpisodicLog(ABC):
         pass
 
     @abstractmethod
-    async def has_turns(self, subject_id: str) -> bool:
+    async def has_turns(
+        self, subject_id: str, exclude_session: str | None = None
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    async def by_session(
+        self, session_id: str, limit: int, offset: int = 0
+    ) -> list[Turn]:
+        pass
+
+    @abstractmethod
+    async def delete(self, subject_id: str) -> None:
         pass
 
     @abstractmethod
