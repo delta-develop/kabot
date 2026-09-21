@@ -23,4 +23,4 @@ class SessionDocument(BaseModel):
     subject_id: str
     turns: list[TurnDraft] = []
     last_activity: datetime
-    status: Literal["open", "consolidating", "consolidated"] = "open"
+    status: Literal["open", "consolidating", "consolidated", "failed"] = "open"

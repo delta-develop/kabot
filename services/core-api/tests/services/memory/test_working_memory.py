@@ -43,6 +43,7 @@ def session_document() -> SessionDocument:
 async def test_store_in_memory_serializes_session_with_ttl(mocker):
     memory = WorkingMemory()
     memory.storage = mocker.AsyncMock()
+    memory.open_index = mocker.AsyncMock()
     session = session_document()
 
     await memory.store_in_memory("session-id", session)
@@ -50,6 +51,48 @@ async def test_store_in_memory_serializes_session_with_ttl(mocker):
     memory.storage.set.assert_awaited_once_with(
         "session-id", session.model_dump(mode="json"), ttl=1800
     )
+
+
+@pytest.mark.asyncio
+async def test_storing_an_open_session_keeps_it_sweepable(mocker):
+    memory = WorkingMemory()
+    memory.storage = mocker.AsyncMock()
+    memory.open_index = mocker.AsyncMock()
+    session = session_document()
+
+    await memory.store_in_memory("session-id", session)
+
+    memory.open_index.add.assert_awaited_once_with("session-id", session.last_activity)
+    memory.open_index.remove.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["consolidating", "consolidated", "failed"])
+@pytest.mark.asyncio
+async def test_storing_a_session_that_is_not_open_takes_it_out_of_the_sweep(
+    mocker, status
+):
+    """The worker's own final write must not re-index what it just finished."""
+    memory = WorkingMemory()
+    memory.storage = mocker.AsyncMock()
+    memory.open_index = mocker.AsyncMock()
+    session = session_document()
+    session.status = status
+
+    await memory.store_in_memory("session-id", session)
+
+    memory.open_index.remove.assert_awaited_once_with("session-id")
+    memory.open_index.add.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_open_sessions_before_delegates_to_the_index(mocker):
+    memory = WorkingMemory()
+    memory.open_index = mocker.AsyncMock()
+    memory.open_index.before.return_value = ["session-a"]
+    cutoff = datetime.now(UTC)
+
+    assert await memory.open_sessions_before(cutoff) == ["session-a"]
+    memory.open_index.before.assert_awaited_once_with(cutoff)
 
 
 @pytest.mark.asyncio
@@ -77,10 +120,12 @@ async def test_retrieve_from_memory_returns_none(mocker):
 async def test_delete_from_memory(mocker):
     memory = WorkingMemory()
     memory.storage = mocker.AsyncMock()
+    memory.open_index = mocker.AsyncMock()
 
     await memory.delete_from_memory("session-id")
 
     memory.storage.delete.assert_awaited_once_with("session-id")
+    memory.open_index.remove.assert_awaited_once_with("session-id")
 
 
 def test_working_memory_uses_session_namespace():
@@ -126,10 +171,15 @@ async def test_forget_subject_deletes_every_indexed_session_and_the_index(mocker
     index = mocker.patch.object(memory, "subject_index", new=AsyncMock())
     index.members.return_value = ["session-a", "session-b"]
     storage = mocker.patch.object(memory, "storage", new=AsyncMock())
+    open_index = mocker.patch.object(memory, "open_index", new=AsyncMock())
 
     await memory.forget_subject("leo")
 
     assert [call.args[0] for call in storage.delete.await_args_list] == [
+        "session-a",
+        "session-b",
+    ]
+    assert [call.args[0] for call in open_index.remove.await_args_list] == [
         "session-a",
         "session-b",
     ]
